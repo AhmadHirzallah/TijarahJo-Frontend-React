@@ -1,0 +1,7 @@
+{
+  "name": "TijarahJo",
+  "description": "A high-performance C2C marketplace platform with real-time API integrations, advanced admin dashboard, and multi-role support.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
