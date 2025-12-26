@@ -5,7 +5,8 @@ import axios from 'axios';
  * CONNECTED TO YOUR LOCAL BACKEND:
  * Using the port from your launchSettings.json (7064)
  */
-const BASE_URL = 'https://localhost:7064/api'; 
+export const BACKEND_URL = 'https://localhost:7064';
+const BASE_URL = `${BACKEND_URL}/api`; 
 
 const api = axios.create({
   baseURL: BASE_URL,

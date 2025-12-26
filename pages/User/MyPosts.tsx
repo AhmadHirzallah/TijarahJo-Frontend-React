@@ -5,7 +5,8 @@ import { postService } from '../../services/postService';
 import { PostDetails, PostStatus } from '../../types/api';
 import Loader from '../../components/UI/Loader';
 import { Trash2, Edit3, ExternalLink, Package } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
+import { BACKEND_URL } from '../../services/api';
 
 const MyPosts: React.FC = () => {
   const { user } = useAuth();
@@ -20,6 +21,13 @@ const MyPosts: React.FC = () => {
       }).catch(() => setLoading(false));
     }
   }, [user]);
+
+  const getAbsoluteImageUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+    return `${BACKEND_URL}${normalizedPath}`;
+  };
 
   const handleDelete = async (id: number) => {
     if (window.confirm("Delete this listing permanently?")) {
@@ -58,42 +66,51 @@ const MyPosts: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {posts.map(post => (
-                <tr key={post.postID} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden shrink-0">
-                        <img src={post.primaryImageUrl || 'https://picsum.photos/100'} className="w-full h-full object-cover" />
+              {posts.map(post => {
+                const postRawImage = post.primaryImageUrl || (post.images && post.images.length > 0 ? post.images[0].postImageURL : null);
+                const tableImage = getAbsoluteImageUrl(postRawImage);
+
+                return (
+                  <tr key={post.postID} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center text-slate-300">
+                          {tableImage ? (
+                            <img src={tableImage} className="w-full h-full object-cover" alt="" />
+                          ) : (
+                            <Package size={20} className="opacity-40" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900">{post.postTitle}</p>
+                          <p className="text-xs text-gray-400">{post.categoryName}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-gray-900">{post.postTitle}</p>
-                        <p className="text-xs text-gray-400">{post.categoryName}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      post.status === PostStatus.Active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {PostStatus[post.status]}
-                    </span>
-                  </td>
-                  <td className="px-8 py-6 font-bold text-blue-600">
-                    ${post.price.toLocaleString()}
-                  </td>
-                  <td className="px-8 py-6 text-right space-x-2">
-                    <Link to={`/post/${post.postID}`} className="p-2 text-gray-400 hover:text-blue-600 inline-block">
-                      <ExternalLink size={18} />
-                    </Link>
-                    <Link to={`/edit-post/${post.postID}`} className="p-2 text-gray-400 hover:text-orange-600 inline-block">
-                      <Edit3 size={18} />
-                    </Link>
-                    <button onClick={() => handleDelete(post.postID)} className="p-2 text-gray-400 hover:text-red-600">
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        post.status === PostStatus.Active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {PostStatus[post.status]}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 font-bold text-blue-600">
+                      {post.price.toLocaleString()} JD
+                    </td>
+                    <td className="px-8 py-6 text-right space-x-2">
+                      <Link to={`/post/${post.postID}`} className="p-2 text-gray-400 hover:text-blue-600 inline-block">
+                        <ExternalLink size={18} />
+                      </Link>
+                      <Link to={`/edit-post/${post.postID}`} className="p-2 text-gray-400 hover:text-orange-600 inline-block">
+                        <Edit3 size={18} />
+                      </Link>
+                      <button onClick={() => handleDelete(post.postID)} className="p-2 text-gray-400 hover:text-red-600">
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -101,7 +118,6 @@ const MyPosts: React.FC = () => {
           <div className="py-20 text-center text-gray-400">
             <Package size={48} className="mx-auto mb-4 opacity-20" />
             <p className="font-bold">No listings yet</p>
-            <p className="text-sm">Items you list for sale will appear here.</p>
           </div>
         )}
       </div>

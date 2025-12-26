@@ -27,7 +27,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser) {
       try {
         const res = await api.get(`/users/${currentUser.userID}/images`);
-        setProfileImage(res.data.primaryImageUrl || null);
+        const data = res.data;
+        
+        // Match the guide's response structure: { images: [...] }
+        if (data && data.images && Array.isArray(data.images) && data.images.length > 0) {
+          // Use the latest or first image as profile picture
+          setProfileImage(data.images[0].imageURL);
+        } else if (data && data.imageURL) {
+          setProfileImage(data.imageURL);
+        } else {
+          setProfileImage(null);
+        }
       } catch (err) {
         console.error("Failed to fetch profile image", err);
         setProfileImage(null);

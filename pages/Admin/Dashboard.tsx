@@ -1,25 +1,26 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { categoryService } from '../../services/categoryService';
 import { AdminDashboardStats, User, Post, RoleID, UserStatus, PostStatus, Category } from '../../types/api';
+import { useAuth } from '../../context/AuthContext';
+import { BACKEND_URL } from '../../services/api';
 import Loader from '../../components/UI/Loader';
 import { 
-  Users, Package, Grid, Shield, TrendingUp, AlertTriangle, Check, X, 
-  Search, ShieldAlert, Trash2, Ban, Eye, Settings, Plus, Edit2, 
-  ChevronRight, Activity, BarChart3, Database, MessageSquare
+  Users, Package, Grid, Shield, TrendingUp, Check, Search, Trash2, Ban, Eye, Settings, Plus, Edit2, 
+  Activity, BarChart3, Database, ShieldAlert, X, AlertTriangle, CheckCircle2, ShieldCheck, ExternalLink
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
-import { Link } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Link } from 'react-router';
 
-type AdminTab = 'overview' | 'users' | 'posts' | 'categories' | 'system';
+type AdminTab = 'overview' | 'users' | 'posts' | 'categories';
 
 const Dashboard: React.FC = () => {
+  const { user: currentUser, profileImage } = useAuth();
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   
-  // Data lists
   const [userList, setUserList] = useState<User[]>([]);
   const [postList, setPostList] = useState<Post[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,25 +29,25 @@ const Dashboard: React.FC = () => {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryName, setCategoryName] = useState('');
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     try {
       const statsData = await adminService.getDashboardStats();
       setStats(statsData);
       
       if (activeTab === 'users') {
-        const { users } = await adminService.getAllUsers({ includeDeleted: true });
-        setUserList(users);
+        const res = await adminService.getAllUsers({ includeDeleted: true });
+        setUserList(res.users);
       } else if (activeTab === 'posts') {
-        const { posts } = await adminService.getAllPosts({ includeDeleted: true });
-        setPostList(posts);
+        const res = await adminService.getAllPosts({ includeDeleted: true });
+        setPostList(res.posts);
       } else if (activeTab === 'categories') {
         const cats = await categoryService.getAll();
         setCategories(cats);
       }
     } catch (err) {
-      console.error("Dashboard Sync Failed", err);
+      console.error("Dashboard out of sync", err);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
     const init = async () => {
@@ -55,328 +56,297 @@ const Dashboard: React.FC = () => {
       setLoading(false);
     };
     init();
-  }, [activeTab]);
+  }, [refreshData]);
+
+  const getAbsoluteImageUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+    return `${BACKEND_URL}${normalizedPath}`;
+  };
 
   const handleUserAction = async (userId: number, action: 'ban' | 'activate' | 'delete') => {
-    if (!window.confirm(`Confirm ${action} action on user #${userId}?`)) return;
+    if (!window.confirm(`Are you sure you want to ${action} user #${userId}?`)) return;
     try {
-      if (action === 'ban') await adminService.updateUserStatus(userId, UserStatus.Banned);
-      if (action === 'activate') await adminService.updateUserStatus(userId, UserStatus.Active);
+      if (action === 'ban') await adminService.updateUserStatus(userId, UserStatus.Banned, "Policy Violation");
+      if (action === 'activate') await adminService.updateUserStatus(userId, UserStatus.Active, "Reinstated");
       if (action === 'delete') await adminService.permanentDeleteUser(userId);
       await refreshData();
-    } catch (err) { alert("Action failed"); }
+      alert(`User #${userId} status updated.`);
+    } catch (err) { alert("Operation denied. Check network status."); }
   };
 
   const handlePostModeration = async (postId: number, status: PostStatus) => {
+    const action = status === PostStatus.Active ? 'Approve' : 'Reject';
     try {
-      await adminService.updatePostStatus(postId, status, "Admin Policy Review");
+      await adminService.updatePostStatus(postId, status, "Security Review Result");
       await refreshData();
-    } catch (err) { alert("Moderation failed"); }
-  };
-
-  const handleCategorySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingCategory) {
-        await adminService.updateCategory(editingCategory.categoryID, categoryName);
-      } else {
-        await adminService.createCategory(categoryName);
-      }
-      setShowCategoryModal(false);
-      setEditingCategory(null);
-      setCategoryName('');
-      await refreshData();
-    } catch (err) { alert("Category operation failed"); }
+      alert(`Listing #${postId} is now ${status === PostStatus.Active ? 'Published' : 'Restricted'}.`);
+    } catch (err) { alert("Moderation decision failed to sync."); }
   };
 
   if (loading) return <Loader fullScreen />;
-  if (!stats) return <div className="p-20 text-center font-black text-slate-400">SESSION_TERMINATED: API UNREACHABLE</div>;
+  if (!stats) return <div className="p-20 text-center font-black text-slate-400">ADMIN_SESSION_LOST</div>;
 
   const distributionData = [
-    { name: 'Active', value: stats.activePosts, color: '#4f46e5' },
-    { name: 'Pending', value: stats.pendingReviewPosts, color: '#f59e0b' },
-    { name: 'Draft', value: stats.draftPosts, color: '#94a3b8' },
-    { name: 'Trash', value: stats.deletedPosts, color: '#f43f5e' }
+    { name: 'Live Marketplace', value: stats.activePosts, color: '#4f46e5' },
+    { name: 'Review Queue', value: stats.pendingReviewPosts, color: '#f59e0b' },
+    { name: 'Removed Assets', value: stats.deletedPosts, color: '#f43f5e' }
   ];
 
   return (
-    <div className="min-h-screen bg-[#fcfcfd] flex">
-      {/* Sidebar Navigation */}
-      <aside className="w-72 bg-slate-900 text-slate-300 flex flex-col hidden lg:flex">
-        <div className="p-8">
-          <div className="flex items-center gap-3 text-white mb-10">
-            <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-500/20">
-              <Database size={24} />
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
+      {/* Sidebar - Enhanced Admin Identity */}
+      <aside className="w-full lg:w-96 bg-slate-900 text-slate-300 flex flex-col z-20 sticky top-0 h-screen overflow-y-auto">
+        <div className="p-10 flex flex-col h-full">
+          {/* Main Brand */}
+          <div className="flex items-center gap-4 text-white mb-14 px-2">
+            <div className="bg-indigo-600 p-3 rounded-2xl shadow-2xl shadow-indigo-600/30">
+              <Database size={28} />
             </div>
-            <span className="text-xl font-black tracking-tighter">Admin <span className="text-indigo-400">Panel</span></span>
+            <div>
+              <span className="text-2xl font-black tracking-tighter block leading-none">TijarahJo</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 mt-1 block">ADMIN_CONSOLE</span>
+            </div>
           </div>
 
-          <nav className="space-y-2">
-            <NavItem active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity size={20}/>} label="Market Stats" />
-            <NavItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={20}/>} label="User List" />
-            <NavItem active={activeTab === 'posts'} onClick={() => setActiveTab('posts')} icon={<Package size={20}/>} label="Post List" />
-            <NavItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Grid size={20}/>} label="Categories" />
-            <NavItem active={activeTab === 'system'} onClick={() => setActiveTab('system')} icon={<Settings size={20}/>} label="System Settings" />
+          {/* User Feature Profile - Big Picture */}
+          <div className="mb-14 relative group">
+            <div className="absolute inset-0 bg-indigo-600/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="relative bg-white/5 rounded-[3rem] p-10 border border-white/10 flex flex-col items-center text-center shadow-2xl">
+               <div className="w-40 h-40 rounded-[2.5rem] bg-gradient-to-br from-indigo-500 to-indigo-700 p-1.5 mb-6 shadow-2xl ring-4 ring-white/5 relative overflow-hidden">
+                  <div className="w-full h-full rounded-[2.25rem] bg-slate-800 overflow-hidden flex items-center justify-center text-5xl font-black text-white">
+                    {profileImage ? (
+                      <img src={getAbsoluteImageUrl(profileImage)!} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="" />
+                    ) : (
+                      <span>{currentUser?.firstName[0]}</span>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-indigo-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button className="bg-white text-indigo-600 p-3 rounded-full shadow-xl"><Edit2 size={20}/></button>
+                  </div>
+               </div>
+               <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-white leading-tight tracking-tight">{currentUser?.fullName}</h3>
+                  <div className="inline-flex items-center gap-2 bg-indigo-500/10 px-6 py-2 rounded-full border border-indigo-500/20">
+                     <ShieldCheck size={14} className="text-indigo-400" />
+                     <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest">Global Controller</span>
+                  </div>
+               </div>
+            </div>
+          </div>
+
+          <nav className="space-y-3 flex-1">
+            <NavItem active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity size={22}/>} label="Market Intelligence" />
+            <NavItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={22}/>} label="Member Records" />
+            <NavItem active={activeTab === 'posts'} onClick={() => setActiveTab('posts')} icon={<Package size={22}/>} label="Asset Moderation" />
+            <NavItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Grid size={22}/>} label="Platform Taxonomy" />
           </nav>
-        </div>
-        
-        <div className="mt-auto p-8 border-t border-slate-800">
-           <div className="bg-slate-800/50 rounded-2xl p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center text-white font-black">A</div>
-              <div>
-                 <p className="text-xs font-black text-white">Administrator</p>
-                 <p className="text-[10px] text-slate-500 uppercase tracking-widest">Active Session</p>
-              </div>
-           </div>
+          
+          <div className="mt-10 pt-10 border-t border-white/5">
+             <button onClick={() => window.location.href = '#/'} className="w-full flex items-center gap-4 px-8 py-5 rounded-2xl font-black text-sm text-slate-500 hover:text-white hover:bg-white/5 transition-all">
+               <ExternalLink size={20} /> View Marketplace
+             </button>
+          </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-6 lg:p-12 space-y-10">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-1">
-             <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-               {activeTab === 'overview' && 'Market Overview'}
-               {activeTab === 'users' && 'Manage Users'}
-               {activeTab === 'posts' && 'Check Posts'}
-               {activeTab === 'categories' && 'Manage Categories'}
-               {activeTab === 'system' && 'Platform Health'}
-             </h2>
-             <p className="text-slate-400 font-medium text-sm">Reviewing activity and site status</p>
+      {/* Main Administrative Worksurface */}
+      <main className="flex-1 p-8 lg:p-16 overflow-y-auto space-y-16">
+        <header className="flex justify-between items-end border-b pb-12 border-slate-200">
+          <div>
+             <h2 className="text-5xl font-black text-slate-900 tracking-tighter capitalize">{activeTab} Worksurface</h2>
+             <p className="text-slate-400 font-bold text-sm uppercase tracking-widest mt-2 ml-1 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                System Operational & Fully Synced
+             </p>
           </div>
-          
-          <div className="flex items-center gap-4">
-             <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm lg:hidden">
-               {(['overview', 'users', 'posts'] as AdminTab[]).map(t => (
-                 <button key={t} onClick={() => setActiveTab(t)} className={`px-4 py-2 rounded-lg text-xs font-bold capitalize ${activeTab === t ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>{t}</button>
-               ))}
-             </div>
-             <button onClick={refreshData} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-600 transition-all">
-                <BarChart3 size={20} />
-             </button>
-          </div>
+          <button 
+            onClick={() => refreshData()} 
+            className="flex items-center gap-3 px-8 py-4 bg-white text-indigo-600 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 hover:bg-indigo-600 hover:text-white transition-all font-black text-sm uppercase tracking-widest"
+          >
+            <Activity size={20}/> Refresh Data
+          </button>
         </header>
 
         {activeTab === 'overview' && (
-          <div className="space-y-10 animate-in fade-in slide-in-from-top-4 duration-700">
-            {/* Summary Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-               <SummaryCard label="Total Users" value={stats.totalUsers} sub="+4% new" color="blue" icon={<Users/>} />
-               <SummaryCard label="Total Postings" value={stats.totalPosts} sub="+18% growth" color="indigo" icon={<Package/>} />
-               <SummaryCard label="Needs Review" value={stats.pendingReviewPosts} sub="Check soon" color="amber" icon={<ShieldAlert/>} pulse={stats.pendingReviewPosts > 0} />
-               <SummaryCard label="Site Status" value="Healthy" sub="Live" color="emerald" icon={<Check/>} />
+          <div className="space-y-16 animate-in fade-in duration-700">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-10">
+               <StatCard label="Active Members" value={stats.totalUsers} color="blue" icon={<Users size={28}/>} />
+               <StatCard label="Market Assets" value={stats.activePosts} color="indigo" icon={<Package size={28}/>} />
+               <StatCard label="Pending Audit" value={stats.pendingReviewPosts} color="amber" icon={<ShieldAlert size={28}/>} pulse={stats.pendingReviewPosts > 0} />
+               <StatCard label="Safety Rating" value="99.9%" color="emerald" icon={<Shield size={28}/>} />
             </div>
 
-            {/* Visual Analytics */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-               <div className="xl:col-span-2 bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-xl shadow-slate-200/50">
-                  <div className="flex items-center justify-between mb-10">
-                     <h4 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <TrendingUp size={20} className="text-indigo-600" /> Postings by Status
-                     </h4>
+            {/* Distribution and Health */}
+            <div className="grid grid-cols-1 2xl:grid-cols-3 gap-14">
+               <div className="2xl:col-span-2 bg-white rounded-[4rem] p-12 shadow-[0_25px_80px_-15px_rgba(0,0,0,0.05)] border border-slate-100">
+                  <div className="flex justify-between items-center mb-12">
+                     <h4 className="text-2xl font-black text-slate-900 flex items-center gap-3">Marketplace Inventory Stats</h4>
+                     <button className="text-xs font-black text-indigo-600 uppercase tracking-widest">Full Report</button>
                   </div>
-                  <div className="h-[350px]">
+                  <div className="h-96">
                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={distributionData}>
-                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
-                           <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
-                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', fontWeight: 800}} />
-                           <Bar dataKey="value" radius={[12, 12, 0, 0]} barSize={45}>
-                              {distributionData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
+                        <BarChart data={distributionData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                           <CartesianGrid strokeDasharray="6 6" vertical={false} stroke="#f1f5f9" />
+                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
+                           <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 700}} />
+                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 30px 60px -12px rgba(0,0,0,0.15)', padding: '20px'}} />
+                           <Bar dataKey="value" radius={[14, 14, 0, 0]} barSize={65}>
+                              {distributionData.map((e, i) => <Cell key={i} fill={e.color} />)}
                            </Bar>
                         </BarChart>
                      </ResponsiveContainer>
                   </div>
                </div>
 
-               <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white relative overflow-hidden flex flex-col justify-between group">
-                  <div className="relative z-10 space-y-10">
-                     <h4 className="text-xl font-black flex items-center gap-2">
-                        <Activity size={20} className="text-indigo-400" /> Site Health
-                     </h4>
-                     <div className="space-y-6">
-                        <HealthBar label="Verified Users" value={stats.activeUsers} total={stats.totalUsers} color="bg-indigo-500" />
-                        <HealthBar label="Public Posts" value={stats.publishedPosts} total={stats.totalPosts} color="bg-emerald-500" />
-                        <HealthBar label="Customer Reviews" value={88} total={100} color="bg-amber-500" />
-                     </div>
+               <div className="bg-slate-900 rounded-[4rem] p-14 text-white flex flex-col justify-center relative overflow-hidden shadow-2xl">
+                  <div className="flex items-center gap-4 mb-14">
+                     <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center"><Activity className="text-indigo-400" /></div>
+                     <h4 className="text-2xl font-black">Platform Health</h4>
                   </div>
-                  <div className="mt-12 relative z-10">
-                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Security Check</p>
-                     <p className="text-lg font-bold mt-2">All Safe</p>
-                     <p className="text-xs text-slate-400 mt-2 leading-relaxed opacity-60">
-                        The platform is running smoothly. No security problems found today.
-                     </p>
+                  <div className="space-y-12">
+                     <HealthBar label="Auth Gateway & Sessions" value={100} color="bg-indigo-500 shadow-indigo-500/40" />
+                     <HealthBar label="Media Content Storage" value={stats.activePosts} total={stats.totalPosts > 0 ? stats.totalPosts : 100} color="bg-emerald-500 shadow-emerald-500/40" />
+                     <HealthBar label="Database Logic Integrity" value={98} color="bg-amber-500 shadow-amber-500/40" />
                   </div>
+                  <TrendingUp size={220} className="absolute -right-16 -bottom-16 opacity-[0.03] rotate-12" />
                </div>
             </div>
           </div>
         )}
 
+        {/* Dynamic Content Views */}
         {(activeTab === 'users' || activeTab === 'posts' || activeTab === 'categories') && (
-          <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-500">
-             <div className="p-10 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-slate-50/20">
-                <div className="space-y-1">
-                   <h3 className="text-2xl font-black text-slate-900">
-                      {activeTab === 'users' ? 'User List' : activeTab === 'posts' ? 'Post List' : 'Category List'}
-                   </h3>
-                   <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.2em]">Record Management</p>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                   <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input 
+           <div className="bg-white rounded-[4rem] shadow-[0_35px_100px_-15px_rgba(0,0,0,0.05)] border border-slate-100 overflow-hidden animate-in slide-in-from-bottom-10 duration-700">
+              <div className="p-12 border-b bg-slate-50/30 flex flex-col md:flex-row justify-between items-center gap-8">
+                 <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Records Hub</h3>
+                 <div className="flex gap-6 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-96">
+                       <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                       <input 
                          type="text" 
-                         placeholder="Search records..." 
-                         className="pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm w-full sm:w-80 focus:ring-4 focus:ring-indigo-100 outline-none transition-all shadow-sm"
-                         value={filterQuery}
-                         onChange={e => setFilterQuery(e.target.value)}
-                      />
-                   </div>
-                   {activeTab === 'categories' && (
-                     <button onClick={() => { setCategoryName(''); setEditingCategory(null); setShowCategoryModal(true); }} className="bg-indigo-600 text-white p-3.5 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
-                        <Plus size={20} />
-                     </button>
-                   )}
-                </div>
-             </div>
+                         placeholder="Deep search records..." 
+                         className="w-full pl-14 pr-6 py-4.5 bg-white border border-slate-200 rounded-[1.5rem] text-sm font-bold shadow-sm outline-none focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 transition-all" 
+                         value={filterQuery} 
+                         onChange={e => setFilterQuery(e.target.value)} 
+                       />
+                    </div>
+                    {activeTab === 'categories' && (
+                      <button 
+                        onClick={() => { setCategoryName(''); setEditingCategory(null); setShowCategoryModal(true); }} 
+                        className="px-8 py-4.5 bg-indigo-600 text-white rounded-2xl shadow-2xl shadow-indigo-600/30 font-black flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all"
+                      >
+                        <Plus size={24}/> New Category
+                      </button>
+                    )}
+                 </div>
+              </div>
 
-             <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                   <thead>
-                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] bg-slate-50/40">
-                         <th className="px-10 py-6">Record Details</th>
-                         <th className="px-10 py-6">{activeTab === 'users' ? 'User Role' : activeTab === 'posts' ? 'Status' : 'ID'}</th>
-                         <th className="px-10 py-6">Created On</th>
-                         <th className="px-10 py-6 text-right">Actions</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-50">
-                      {activeTab === 'users' && userList.filter(u => u.fullName.toLowerCase().includes(filterQuery.toLowerCase())).map(user => (
-                         <tr key={user.userID} className="hover:bg-indigo-50/20 transition-all group">
-                            <td className="px-10 py-6">
-                               <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-900 font-black border-2 border-white shadow-sm">
-                                     {user.firstName[0]}
-                                  </div>
-                                  <div>
-                                     <p className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{user.fullName}</p>
-                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{user.email}</p>
-                                  </div>
-                               </div>
-                            </td>
-                            <td className="px-10 py-6">
-                               <select 
-                                  className="text-xs font-black bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-indigo-500"
-                                  value={user.roleID}
-                                  onChange={(e) => adminService.updateUserRole(user.userID, parseInt(e.target.value) as RoleID).then(refreshData)}
-                               >
-                                  <option value={RoleID.Admin}>Admin</option>
-                                  <option value={RoleID.User}>User</option>
-                                  <option value={RoleID.Moderator}>Mod</option>
-                               </select>
-                            </td>
-                            <td className="px-10 py-6">
-                               <Badge status={user.status === UserStatus.Active ? 'success' : 'danger'}>{UserStatus[user.status]}</Badge>
-                            </td>
-                            <td className="px-10 py-6 text-right">
-                               <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                  {user.status === UserStatus.Active ? (
-                                    <ActionButton onClick={() => handleUserAction(user.userID, 'ban')} icon={<Ban size={18}/>} color="rose" title="Ban User" />
-                                  ) : (
-                                    <ActionButton onClick={() => handleUserAction(user.userID, 'activate')} icon={<Check size={18}/>} color="emerald" title="Unban User" />
-                                  )}
-                                  <ActionButton onClick={() => handleUserAction(user.userID, 'delete')} icon={<Trash2 size={18}/>} color="slate" title="Remove User" />
-                               </div>
-                            </td>
-                         </tr>
-                      ))}
+              <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                    <thead>
+                       <tr className="bg-slate-50 text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] border-b">
+                          <th className="px-14 py-9">Entity Details</th>
+                          <th className="px-14 py-9">Operational Status</th>
+                          <th className="px-14 py-9 text-right">Moderation Console</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                       {activeTab === 'users' && userList.filter(u => u.fullName.toLowerCase().includes(filterQuery.toLowerCase())).map(user => (
+                          <tr key={user.userID} className="hover:bg-indigo-50/20 transition-all duration-300">
+                             <td className="px-14 py-9">
+                                <p className="font-black text-slate-900 text-2xl tracking-tight">{user.fullName}</p>
+                                <p className="text-xs text-slate-400 uppercase font-black tracking-widest mt-1 opacity-70">{user.email}</p>
+                             </td>
+                             <td className="px-14 py-9">
+                                <span className={`px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${user.status === UserStatus.Active ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-100'}`}>
+                                   {UserStatus[user.status]}
+                                </span>
+                             </td>
+                             <td className="px-14 py-9 text-right space-x-4">
+                                {user.status === UserStatus.Active ? (
+                                  <button onClick={() => handleUserAction(user.userID, 'ban')} className="p-4.5 text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-2xl transition-all shadow-sm"><Ban size={22}/></button>
+                                ) : (
+                                  <button onClick={() => handleUserAction(user.userID, 'activate')} className="p-4.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-2xl transition-all shadow-sm"><CheckCircle2 size={22}/></button>
+                                )}
+                                <button onClick={() => handleUserAction(user.userID, 'delete')} className="p-4.5 text-slate-300 bg-slate-100 hover:bg-slate-900 hover:text-white rounded-2xl transition-all shadow-sm"><Trash2 size={22}/></button>
+                             </td>
+                          </tr>
+                       ))}
 
-                      {activeTab === 'posts' && postList.filter(p => p.postTitle.toLowerCase().includes(filterQuery.toLowerCase())).map(post => (
-                         <tr key={post.postID} className="hover:bg-amber-50/10 transition-all group">
-                            <td className="px-10 py-6">
-                               <div className="flex items-center gap-4">
-                                  <div className="w-20 h-14 rounded-2xl bg-slate-100 overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
-                                     <img src={`https://picsum.photos/200/200?random=${post.postID}`} className="w-full h-full object-cover" />
-                                  </div>
-                                  <div>
-                                     <p className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">{post.postTitle}</p>
-                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">${post.price.toLocaleString()}</p>
-                                  </div>
-                               </div>
-                            </td>
-                            <td className="px-10 py-6">
-                               <Badge status={post.status === PostStatus.Active ? 'success' : post.status === PostStatus.PendingReview ? 'warning' : 'neutral'}>
-                                  {PostStatus[post.status]}
-                               </Badge>
-                            </td>
-                            <td className="px-10 py-6 font-bold text-slate-500 text-xs">
-                               {new Date(post.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-10 py-6 text-right">
-                               <div className="flex items-center justify-end gap-2">
-                                  <Link to={`/post/${post.postID}`} className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Eye size={18}/></Link>
-                                  {post.status === PostStatus.PendingReview && (
-                                     <button onClick={() => handlePostModeration(post.postID, PostStatus.Active)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">Accept</button>
-                                  )}
-                                  <ActionButton onClick={() => adminService.deletePost(post.postID).then(refreshData)} icon={<Trash2 size={18}/>} color="rose" title="Remove Post" />
-                               </div>
-                            </td>
-                         </tr>
-                      ))}
+                       {activeTab === 'posts' && postList.filter(p => p.postTitle.toLowerCase().includes(filterQuery.toLowerCase())).map(post => (
+                          <tr key={post.postID} className="hover:bg-indigo-50/20 transition-all duration-300">
+                             <td className="px-14 py-9">
+                                <p className="font-black text-slate-900 text-2xl tracking-tight">{post.postTitle}</p>
+                                <p className="text-xs text-slate-400 uppercase font-black tracking-widest mt-1 opacity-70">{post.price.toLocaleString()} JD • ASSET_ID: {post.postID}</p>
+                             </td>
+                             <td className="px-14 py-9">
+                                <span className={`px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${post.status === PostStatus.Active ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+                                   {PostStatus[post.status]}
+                                </span>
+                             </td>
+                             <td className="px-14 py-9 text-right space-x-4">
+                                <Link to={`/post/${post.postID}`} className="p-4.5 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-2xl inline-block transition-all shadow-sm"><Eye size={22}/></Link>
+                                {post.status !== PostStatus.Active && (
+                                  <button onClick={() => handlePostModeration(post.postID, PostStatus.Active)} className="p-4.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-2xl transition-all shadow-sm" title="Approve Asset"><CheckCircle2 size={22}/></button>
+                                )}
+                                {post.status !== PostStatus.Rejected && (
+                                  <button onClick={() => handlePostModeration(post.postID, PostStatus.Rejected)} className="p-4.5 text-amber-500 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-2xl transition-all shadow-sm" title="Reject Asset"><AlertTriangle size={22}/></button>
+                                )}
+                                <button onClick={() => adminService.deletePost(post.postID).then(refreshData)} className="p-4.5 text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-2xl transition-all shadow-sm"><Trash2 size={22}/></button>
+                             </td>
+                          </tr>
+                       ))}
 
-                      {activeTab === 'categories' && categories.filter(c => c.categoryName.toLowerCase().includes(filterQuery.toLowerCase())).map(cat => (
-                         <tr key={cat.categoryID} className="hover:bg-indigo-50/10 transition-all group">
-                            <td className="px-10 py-6">
-                               <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black">
-                                     <Grid size={20} />
-                                  </div>
-                                  <p className="font-black text-slate-900">{cat.categoryName}</p>
-                               </div>
-                            </td>
-                            <td className="px-10 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">#{cat.categoryID}</td>
-                            <td className="px-10 py-6 font-bold text-slate-500 text-xs">{new Date(cat.createdAt).toLocaleDateString()}</td>
-                            <td className="px-10 py-6 text-right">
-                               <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => { setEditingCategory(cat); setCategoryName(cat.categoryName); setShowCategoryModal(true); }} className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Edit2 size={18}/></button>
-                                  <ActionButton onClick={() => adminService.deleteCategory(cat.categoryID).then(refreshData)} icon={<Trash2 size={18}/>} color="rose" title="Delete Category" />
-                               </div>
-                            </td>
-                         </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-          </div>
+                       {activeTab === 'categories' && categories.filter(c => c.categoryName.toLowerCase().includes(filterQuery.toLowerCase())).map(cat => (
+                          <tr key={cat.categoryID} className="hover:bg-indigo-50/20 transition-all duration-300">
+                             <td className="px-14 py-9 font-black text-2xl text-slate-900 tracking-tight">{cat.categoryName}</td>
+                             <td className="px-14 py-9 text-[11px] text-slate-400 font-black tracking-[0.3em] uppercase opacity-70">Taxonomy Protocol Node #{cat.categoryID}</td>
+                             <td className="px-14 py-9 text-right space-x-4">
+                                <button onClick={() => { setCategoryName(cat.categoryName); setEditingCategory(cat); setShowCategoryModal(true); }} className="p-4.5 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all shadow-sm"><Edit2 size={22}/></button>
+                                <button onClick={() => adminService.deleteCategory(cat.categoryID).then(refreshData)} className="p-4.5 text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-2xl transition-all shadow-sm"><Trash2 size={22}/></button>
+                             </td>
+                          </tr>
+                       ))}
+                    </tbody>
+                 </table>
+              </div>
+           </div>
         )}
       </main>
 
-      {/* Category Modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
-           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-3xl p-10 animate-in zoom-in-95 duration-200">
-              <h3 className="text-2xl font-black text-slate-900 mb-2">{editingCategory ? 'Update Category' : 'New Category'}</h3>
-              <p className="text-slate-400 font-medium text-sm mb-8">Change or add a marketplace category.</p>
-              
-              <form onSubmit={handleCategorySubmit} className="space-y-6">
-                 <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category Name</label>
-                    <input 
-                       required 
-                       type="text" 
-                       className="w-full mt-2 px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-100 transition-all font-bold" 
-                       placeholder="e.g. Car Parts"
-                       value={categoryName}
-                       onChange={e => setCategoryName(e.target.value)}
-                    />
-                 </div>
-                 <div className="flex items-center gap-4 pt-4">
-                    <button type="button" onClick={() => setShowCategoryModal(false)} className="flex-1 py-4 font-black text-slate-500 hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
-                    <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all">Save</button>
-                 </div>
-              </form>
+        <div className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-xl flex items-center justify-center p-8">
+           <div className="bg-white w-full max-w-xl rounded-[4rem] p-16 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500">
+              <h3 className="text-4xl font-black mb-12 text-slate-900 tracking-tighter">Marketplace Taxonomy</h3>
+              <div className="space-y-4 mb-14">
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Protocol Item Label</label>
+                <input 
+                  type="text" 
+                  className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none focus:border-indigo-600 focus:bg-white font-black text-2xl transition-all shadow-inner" 
+                  placeholder="Electronics, Luxury, etc..." 
+                  value={categoryName} 
+                  onChange={e => setCategoryName(e.target.value)} 
+                />
+              </div>
+              <div className="flex gap-6">
+                 <button onClick={() => setShowCategoryModal(false)} className="flex-1 font-black text-slate-400 hover:text-slate-900 transition-colors uppercase text-sm tracking-[0.2em]">Discard Change</button>
+                 <button 
+                   onClick={async () => {
+                      try {
+                        if (editingCategory) await adminService.updateCategory(editingCategory.categoryID, categoryName);
+                        else await adminService.createCategory(categoryName);
+                        setShowCategoryModal(false);
+                        refreshData();
+                      } catch (err) { alert("Core protocol synchronization error."); }
+                   }} 
+                   className="flex-1 py-6 bg-indigo-600 text-white rounded-[1.75rem] font-black shadow-2xl shadow-indigo-600/40 hover:bg-indigo-700 active:scale-95 transition-all text-sm uppercase tracking-widest"
+                 >
+                   Commit Update
+                 </button>
+              </div>
            </div>
         </div>
       )}
@@ -384,69 +354,30 @@ const Dashboard: React.FC = () => {
   );
 };
 
-// UI Sub-components
 const NavItem: React.FC<{ active: boolean, onClick: () => void, icon: React.ReactNode, label: string }> = ({ active, onClick, icon, label }) => (
-  <button 
-    onClick={onClick}
-    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-sm transition-all ${
-      active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
-    }`}
-  >
+  <button onClick={onClick} className={`w-full flex items-center gap-5 px-10 py-5 rounded-[1.5rem] font-black text-[15px] tracking-tight transition-all border-2 ${active ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-600/40 border-indigo-600' : 'text-slate-500 hover:text-white hover:bg-slate-800 border-transparent'}`}>
     {icon} {label}
   </button>
 );
 
-const SummaryCard: React.FC<{ label: string, value: string | number, sub: string, color: string, icon: React.ReactNode, pulse?: boolean }> = ({ label, value, sub, color, icon, pulse }) => {
-  const colors: Record<string, string> = {
-    blue: 'bg-blue-600 shadow-blue-100',
-    indigo: 'bg-indigo-600 shadow-indigo-100',
-    amber: 'bg-amber-500 shadow-amber-100',
-    emerald: 'bg-emerald-500 shadow-emerald-100'
-  };
+const StatCard: React.FC<{ label: string, value: string | number, icon: React.ReactNode, color: string, pulse?: boolean }> = ({ label, value, icon, color, pulse }) => {
+  const themes: any = { blue: 'bg-blue-600', indigo: 'bg-indigo-600', amber: 'bg-amber-500', emerald: 'bg-emerald-600' };
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 flex items-center gap-6 relative overflow-hidden group hover:translate-y-[-4px] transition-all">
-       <div className={`${colors[color]} p-5 rounded-2xl text-white shadow-2xl ${pulse ? 'animate-pulse' : ''} transition-transform group-hover:scale-110`}>
-          {icon}
-       </div>
-       <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-          <p className="text-3xl font-black text-slate-900 mt-1">{value.toLocaleString()}</p>
-          <p className={`text-[10px] font-black mt-1 ${color === 'amber' ? 'text-amber-600' : 'text-emerald-500'}`}>{sub}</p>
-       </div>
+    <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.03)] flex items-center gap-8 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
+      <div className={`${themes[color]} p-6 rounded-[2rem] text-white shadow-2xl ${pulse ? 'animate-pulse' : ''}`}>{icon}</div>
+      <div>
+         <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em]">{label}</p>
+         <p className="text-4xl font-black text-slate-900 mt-2 tracking-tighter">{value.toLocaleString()}</p>
+      </div>
     </div>
   );
 };
 
-const HealthBar: React.FC<{ label: string, value: number, total: number, color: string }> = ({ label, value, total, color }) => (
-  <div className="space-y-3">
-     <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-        <span className="text-slate-500">{label}</span>
-        <span className="text-white">{Math.round((value/total)*100)}%</span>
-     </div>
-     <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-        <div className={`${color} h-full rounded-full transition-all duration-1000`} style={{ width: `${(value/total)*100}%` }}></div>
-     </div>
+const HealthBar: React.FC<{ label: string, value: number, total?: number, color: string }> = ({ label, value, total = 100, color }) => (
+  <div className="space-y-4">
+     <div className="flex justify-between text-[11px] font-black uppercase tracking-[0.2em] opacity-50"><span>{label}</span><span>{Math.round((value/total)*100)}%</span></div>
+     <div className="h-3.5 bg-white/5 rounded-full overflow-hidden shadow-inner p-0.5"><div className={`${color} h-full transition-all duration-1000 rounded-full shadow-lg`} style={{ width: `${(value/total)*100}%` }}></div></div>
   </div>
 );
-
-const Badge: React.FC<{ status: 'success' | 'danger' | 'warning' | 'neutral', children: React.ReactNode }> = ({ status, children }) => {
-  const styles = {
-    success: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    danger: 'bg-rose-100 text-rose-700 border-rose-200',
-    warning: 'bg-amber-100 text-amber-700 border-amber-200',
-    neutral: 'bg-slate-100 text-slate-600 border-slate-200'
-  };
-  return <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${styles[status]}`}>{children}</span>;
-};
-
-const ActionButton: React.FC<{ onClick: () => void, icon: React.ReactNode, color: string, title?: string }> = ({ onClick, icon, color, title }) => {
-  const colors: Record<string, string> = {
-    rose: 'text-rose-400 hover:text-rose-600 hover:bg-rose-50',
-    emerald: 'text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50',
-    slate: 'text-slate-400 hover:text-slate-900 hover:bg-slate-50',
-    indigo: 'text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50'
-  };
-  return <button onClick={onClick} className={`p-2.5 rounded-xl transition-all ${colors[color]}`} title={title}>{icon}</button>;
-};
 
 export default Dashboard;

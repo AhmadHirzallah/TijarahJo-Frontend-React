@@ -1,460 +1,360 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../services/api';
-import { userService } from '../../services/userService';
-import { UserImage, PhoneNumber } from '../../types/api';
-import { Mail, Calendar, Shield, Camera, Trash2, Upload, Edit2, Lock, Save, X, Phone, Plus, CheckCircle } from 'lucide-react';
+import api, { BACKEND_URL } from '../../services/api';
+import { User } from '../../types/api';
+import { Camera, Trash2, Edit2, Lock, Phone, Plus, ShieldCheck, Key, Star, CheckCircle2, AlertCircle } from 'lucide-react';
 import Loader from '../../components/UI/Loader';
 
+interface PhoneData {
+  phoneID: number;
+  userID: number;
+  phoneNumber: string;
+  isPrimary: boolean;
+}
+
 const Profile: React.FC = () => {
-  const { user, refreshProfileImage } = useAuth();
-  const [images, setImages] = useState<UserImage[]>([]);
-  const [phones, setPhones] = useState<PhoneNumber[]>([]);
+  const { user, profileImage, refreshProfileImage } = useAuth();
+  const [profile, setProfile] = useState<User | null>(null);
+  const [phones, setPhones] = useState<PhoneData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   
-  // Profile Form State
-  const [profileForm, setProfileForm] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    email: user?.email || '',
-    username: user?.username || ''
+  // States for forms
+  const [isEditing, setIsEditing] = useState(false);
+  const [isChangingPass, setIsChangingPass] = useState(false);
+  
+  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', email: '', username: '' });
+  const [newPhone, setNewPhone] = useState('');
+  
+  const [passForm, setPassForm] = useState({ 
+    currentPassword: '', 
+    newPassword: '', 
+    confirmPassword: '' 
   });
+  const [passError, setPassError] = useState('');
+  const [passSuccess, setPassSuccess] = useState('');
 
-  // Phone Form State
-  const [isAddingPhone, setIsAddingPhone] = useState(false);
-  const [newPhone, setNewPhone] = useState({ phoneNumber: '', isPrimary: false });
-
-  // Password Form State
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-
-  const loadData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
     try {
-      const [imgRes, phoneRes] = await Promise.all([
-        api.get(`/users/${user.userID}/images`),
-        userService.getPhones(user.userID)
+      const [profileRes, phonesRes] = await Promise.all([
+        api.get('/users/me'),
+        api.get(`/users/${user.userID}/phones`)
       ]);
-      setImages(imgRes.data.images || []);
-      setPhones(phoneRes.phoneNumbers || []);
-    } catch (err) {
-      console.error("Failed to load profile data", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-    if (user) {
-      setProfileForm({
-        firstName: user.firstName,
-        lastName: user.lastName || '',
-        email: user.email,
-        username: user.username
+      setProfile(profileRes.data);
+      setProfileForm({ 
+        firstName: profileRes.data.firstName, 
+        lastName: profileRes.data.lastName || '', 
+        email: profileRes.data.email, 
+        username: profileRes.data.username 
       });
+      setPhones(phonesRes.data.phoneNumbers || []);
+    } catch (err) { 
+      console.error(err); 
+    } finally { 
+      setLoading(false); 
     }
   }, [user]);
 
+  useEffect(() => { fetchData(); }, [fetchData]);
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-    setLoading(true);
     try {
-      await api.put(`/users/${user.userID}`, {
-        ...profileForm,
-        status: user.status,
-        roleID: user.roleID,
-        isDeleted: user.isDeleted
-      });
-      const updatedUser = { ...user, ...profileForm };
-      localStorage.setItem('user_data', JSON.stringify(updatedUser));
-      window.location.reload();
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Update failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddPhone = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setLoading(true);
-    try {
-      await userService.addPhone(user.userID, newPhone);
-      await loadData();
-      setIsAddingPhone(false);
-      setNewPhone({ phoneNumber: '', isPrimary: false });
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to add phone number");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTogglePrimary = async (phone: PhoneNumber) => {
-    if (!user || phone.isPrimary) return;
-    setLoading(true);
-    try {
-      await userService.updatePhone(user.userID, phone.phoneID, {
-        phoneNumber: phone.phoneNumber,
-        isPrimary: true,
-        isDeleted: false
-      });
-      await loadData();
-    } catch (err) {
-      alert("Failed to update primary phone");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeletePhone = async (phoneId: number) => {
-    if (!user || !window.confirm("Delete this phone number?")) return;
-    setLoading(true);
-    try {
-      await userService.deletePhone(user.userID, phoneId);
-      await loadData();
-    } catch (err) {
-      alert("Failed to delete phone number");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !user) return;
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('file', e.target.files[0]);
-    try {
-      await api.post(`/users/${user.userID}/images/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      const res = await api.get(`/users/${user.userID}/images`);
-      setImages(res.data.images || []);
-      await refreshProfileImage();
-    } catch (err) {
-      alert("Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const deleteImage = async (imageId: number) => {
-    if (!user || !window.confirm("Delete this profile image?")) return;
-    try {
-      await api.delete(`/users/${user.userID}/images/${imageId}`);
-      setImages(images.filter(img => img.userImageID !== imageId));
-      await refreshProfileImage();
-    } catch (err) {
-      alert("Delete failed");
+      const res = await api.put('/users/me', profileForm);
+      setProfile(res.data);
+      localStorage.setItem('user_data', JSON.stringify(res.data));
+      setIsEditing(false);
+      alert("Profile details updated successfully.");
+    } catch (err) { 
+      alert("Failed to update profile details."); 
     }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert("New passwords do not match");
+    setPassError('');
+    setPassSuccess('');
+
+    if (passForm.newPassword !== passForm.confirmPassword) {
+      setPassError("New passwords do not match.");
       return;
     }
-    setLoading(true);
+
     try {
-      await api.put(`/users/${user.userID}/password`, passwordForm);
-      alert("Password changed successfully!");
-      setIsChangingPassword(false);
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      await api.put('/users/me/password', {
+        currentPassword: passForm.currentPassword,
+        newPassword: passForm.newPassword
+      });
+      setPassSuccess("Password updated successfully.");
+      setPassForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => setIsChangingPass(false), 2000);
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Password change failed");
+      setPassError(err.response?.data?.detail || "Failed to update password. Verify current password.");
+    }
+  };
+
+  const handlePhoneAction = async (action: 'add' | 'delete' | 'primary', payload?: any) => {
+    if (!profile) return;
+    try {
+      if (action === 'add') {
+        if (!newPhone) return;
+        await api.post(`/users/${profile.userID}/phones`, { phoneNumber: normalizePhone(newPhone) });
+      }
+      if (action === 'delete') await api.delete(`/users/${profile.userID}/phones/${payload}`);
+      if (action === 'primary') await api.put(`/users/${profile.userID}/phones/${payload}/primary`);
+      setNewPhone('');
+      fetchData();
+    } catch (err) { 
+      alert("Phone update failed."); 
+    }
+  };
+
+  const normalizePhone = (p: string) => {
+    let c = p.replace(/\D/g, '');
+    if (c.startsWith('07')) return '+962' + c.substring(1);
+    return c.startsWith('962') ? '+' + c : p;
+  };
+
+  const getAbsoluteImageUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+    return `${BACKEND_URL}${normalizedPath}`;
+  };
+
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!profile || !e.target.files?.[0]) return;
+    const fd = new FormData();
+    fd.append('file', e.target.files[0]);
+    try {
+      setLoading(true);
+      await api.post(`/users/${profile.userID}/images/upload`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      await refreshProfileImage();
+      await fetchData();
+    } catch (err) {
+      alert("Image upload failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading && !isEditing && !isAddingPhone && !isChangingPassword) return <Loader fullScreen />;
-  if (!user) return null;
+  if (loading) return <Loader fullScreen />;
+  if (!profile) return <div className="p-20 text-center font-black">USER NOT FOUND</div>;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-12">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white rounded-[3rem] shadow-xl overflow-hidden border">
-            <div className="h-40 bg-gradient-to-r from-blue-600 to-indigo-700 relative">
-              <div className="absolute -bottom-12 left-8 flex items-end gap-6">
-                <div className="relative group">
-                  <div className="w-32 h-32 rounded-[2.5rem] bg-white p-2 shadow-2xl">
-                    <div className="w-full h-full rounded-[2rem] bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-4xl overflow-hidden border-2 border-white shadow-sm">
-                      {images.length > 0 ? (
-                        <img src={images[0].imageURL} alt={user.fullName} className="w-full h-full object-cover" />
-                      ) : user.firstName[0]}
-                    </div>
+    <div className="max-w-7xl mx-auto px-6 py-16 space-y-16">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+        
+        {/* Main Content Area */}
+        <div className="lg:col-span-8 space-y-12">
+          
+          {/* Header Card */}
+          <div className="bg-white rounded-[4rem] shadow-2xl overflow-hidden border border-slate-50 relative">
+            <div className="h-72 bg-slate-900 relative">
+              <div className="absolute -bottom-20 left-16 flex items-center gap-10">
+                <div className="w-56 h-56 rounded-[3.5rem] bg-white p-2 shadow-2xl">
+                  <div className="w-full h-full rounded-[3rem] bg-indigo-50 flex items-center justify-center text-7xl font-black text-indigo-400 overflow-hidden relative group">
+                    {profileImage ? (
+                      <img 
+                        src={`${getAbsoluteImageUrl(profileImage)}?t=${Date.now()}`} 
+                        className="w-full h-full object-cover" 
+                        alt="Profile"
+                      />
+                    ) : (
+                      <span>{profile.firstName[0]}</span>
+                    )}
+                    <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center cursor-pointer backdrop-blur-sm">
+                      <Camera className="text-white" size={40} />
+                      <input type="file" className="hidden" onChange={handleProfileImageUpload} />
+                    </label>
                   </div>
-                  <label className="absolute bottom-2 right-2 p-2 bg-blue-600 text-white rounded-xl shadow-lg cursor-pointer hover:bg-blue-700 transition-all">
-                    <Camera size={18} />
-                    <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-                  </label>
                 </div>
-                <div className="mb-4 text-white">
-                  <h1 className="text-3xl font-black">{user.fullName}</h1>
-                  <p className="opacity-80 font-medium">@{user.username}</p>
+                <div className="pb-4">
+                   <h1 className="text-5xl font-black text-white tracking-tighter mb-2">{profile.fullName}</h1>
+                   <div className="flex items-center gap-2 px-6 py-2 bg-indigo-600 rounded-full text-white text-[10px] font-black uppercase tracking-widest shadow-2xl">
+                      <ShieldCheck size={16} /> Verified Marketplace User
+                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="pt-20 px-10 pb-10">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <Shield size={20} className="text-blue-600" /> Account Settings
-                </h2>
-                <button 
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gray-50 hover:bg-gray-100 text-gray-700 transition-colors"
-                >
-                  {isEditing ? <><X size={16}/> Cancel</> : <><Edit2 size={16}/> Edit Details</>}
-                </button>
+            <div className="pt-32 p-16">
+              <div className="flex justify-between items-center mb-12 border-b pb-12">
+                 <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Personal Information</h3>
+                 <button onClick={() => setIsEditing(!isEditing)} className="px-8 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:bg-indigo-600 hover:text-white transition-all">
+                   {isEditing ? 'Discard Changes' : 'Edit Profile'}
+                 </button>
               </div>
 
               {isEditing ? (
-                <form onSubmit={handleUpdateProfile} className="space-y-6 animate-in fade-in slide-in-from-top-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">First Name</label>
-                      <input 
-                        type="text" 
-                        className="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500"
-                        value={profileForm.firstName}
-                        onChange={e => setProfileForm({...profileForm, firstName: e.target.value})}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Last Name</label>
-                      <input 
-                        type="text" 
-                        className="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500"
-                        value={profileForm.lastName}
-                        onChange={e => setProfileForm({...profileForm, lastName: e.target.value})}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
-                      <input 
-                        type="email" 
-                        className="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500"
-                        value={profileForm.email}
-                        onChange={e => setProfileForm({...profileForm, email: e.target.value})}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Username</label>
-                      <input 
-                        type="text" 
-                        className="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500"
-                        value={profileForm.username}
-                        onChange={e => setProfileForm({...profileForm, username: e.target.value})}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end pt-4">
-                    <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg">
-                      <Save size={18} /> Save Changes
-                    </button>
+                <form onSubmit={handleUpdateProfile} className="grid grid-cols-2 gap-8 animate-in slide-in-from-top-4">
+                  <InputGroup label="First Name" value={profileForm.firstName} onChange={v => setProfileForm({...profileForm, firstName: v})} />
+                  <InputGroup label="Last Name" value={profileForm.lastName} onChange={v => setProfileForm({...profileForm, lastName: v})} />
+                  <InputGroup label="Username" value={profileForm.username} onChange={v => setProfileForm({...profileForm, username: v})} />
+                  <InputGroup label="Email Address" value={profileForm.email} onChange={v => setProfileForm({...profileForm, email: v})} />
+                  <div className="col-span-2 flex justify-end">
+                    <button type="submit" className="bg-indigo-600 text-white px-12 py-5 rounded-2xl font-black shadow-2xl hover:bg-indigo-700 active:scale-95 transition-all">Save Changes</button>
                   </div>
                 </form>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl">
-                    <Mail className="text-blue-500" size={20} />
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Email Address</p>
-                      <p className="text-sm font-semibold">{user.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl">
-                    <Calendar className="text-blue-500" size={20} />
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Member Since</p>
-                      <p className="text-sm font-semibold">{new Date(user.joinDate).toLocaleDateString()}</p>
-                    </div>
-                  </div>
+                <div className="grid grid-cols-2 gap-10">
+                   <StaticDetail label="User ID" value={`#${profile.userID}`} />
+                   <StaticDetail label="Username" value={profile.username} />
+                   <StaticDetail label="Email Address" value={profile.email} />
+                   <StaticDetail label="Account Created" value={new Date(profile.joinDate).toLocaleDateString()} />
                 </div>
               )}
             </div>
           </div>
 
-          {/* Phone Management Section */}
-          <div className="bg-white rounded-[2.5rem] shadow-xl p-8 border">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Phone size={20} className="text-blue-600" /> Phone Numbers
-              </h2>
-              <button 
-                onClick={() => setIsAddingPhone(!isAddingPhone)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
-              >
-                {isAddingPhone ? <X size={16}/> : <><Plus size={16}/> Add New</>}
-              </button>
-            </div>
-
-            {isAddingPhone && (
-              <form onSubmit={handleAddPhone} className="mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-100 space-y-4 animate-in fade-in slide-in-from-top-2">
+          {/* Phone Numbers Section */}
+          <div className="bg-white rounded-[4rem] p-16 shadow-2xl border border-slate-50">
+             <div className="flex items-center justify-between mb-12">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Phone Numbers</h3>
+                   <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Manage your contact points</p>
+                </div>
                 <div className="flex gap-4">
-                  <input 
-                    type="tel" 
-                    placeholder="+962 7X XXX XXXX"
-                    className="flex-grow px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500"
-                    value={newPhone.phoneNumber}
-                    onChange={e => setNewPhone({...newPhone, phoneNumber: e.target.value})}
-                    required
-                  />
-                  <div className="flex items-center gap-2 px-4">
-                    <input 
-                      type="checkbox" 
-                      id="primary-check"
-                      checked={newPhone.isPrimary}
-                      onChange={e => setNewPhone({...newPhone, isPrimary: e.target.checked})}
-                    />
-                    <label htmlFor="primary-check" className="text-sm font-bold text-gray-600">Primary</label>
-                  </div>
-                  <button type="submit" className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold">
-                    Add Number
-                  </button>
+                   <input 
+                     type="tel" 
+                     placeholder="07XXXXXXXX" 
+                     className="px-6 py-4 bg-slate-50 rounded-2xl font-black text-sm outline-none focus:ring-4 focus:ring-indigo-50 border border-slate-100" 
+                     value={newPhone} 
+                     onChange={e => setNewPhone(e.target.value)} 
+                   />
+                   <button onClick={() => handlePhoneAction('add')} className="p-4 bg-indigo-600 text-white rounded-2xl shadow-xl hover:bg-indigo-700 active:scale-90 transition-all">
+                     <Plus size={24}/>
+                   </button>
                 </div>
-              </form>
-            )}
-
-            <div className="space-y-4">
-              {phones.length > 0 ? phones.map(phone => (
-                <div key={phone.phoneID} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-transparent hover:border-gray-200 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg ${phone.isPrimary ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'}`}>
-                      <Phone size={20} />
+             </div>
+             <div className="grid gap-6">
+                {phones.map(p => (
+                  <div key={p.phoneID} className={`p-8 rounded-[3rem] flex items-center justify-between transition-all border-2 ${p.isPrimary ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50/50 border-transparent hover:border-slate-100'}`}>
+                    <div className="flex items-center gap-6">
+                       <div className={`p-5 rounded-3xl ${p.isPrimary ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'bg-white text-slate-300 shadow-sm'}`}>
+                         <Phone size={24}/>
+                       </div>
+                       <div>
+                          <p className="text-2xl font-black text-slate-900 tracking-tight">{p.phoneNumber}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mt-1">{p.isPrimary ? 'Primary Phone' : 'Secondary Phone'}</p>
+                       </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-gray-900">{phone.phoneNumber}</p>
-                      {phone.isPrimary && <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Primary Contact</span>}
+                    <div className="flex gap-3">
+                       {!p.isPrimary && (
+                         <button onClick={() => handlePhoneAction('primary', p.phoneID)} className="p-4 text-slate-400 hover:text-amber-500 hover:bg-white rounded-2xl transition-all shadow-sm" title="Set Primary"><Star size={20}/></button>
+                       )}
+                       <button onClick={() => handlePhoneAction('delete', p.phoneID)} className="p-4 text-slate-400 hover:text-rose-600 hover:bg-white rounded-2xl transition-all shadow-sm" title="Remove Phone"><Trash2 size={20}/></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {!phone.isPrimary && (
-                      <button 
-                        onClick={() => handleTogglePrimary(phone)}
-                        className="p-2 text-gray-400 hover:text-green-600 transition-colors"
-                        title="Set as primary"
-                      >
-                        <CheckCircle size={20} />
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => handleDeletePhone(phone.phoneID)}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                      title="Delete number"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                </div>
-              )) : (
-                <p className="text-center text-gray-400 py-4 italic">No phone numbers added yet.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-[2.5rem] shadow-xl p-8 border">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Lock size={20} className="text-blue-600" /> Privacy & Security
-              </h2>
-              <button 
-                onClick={() => setIsChangingPassword(!isChangingPassword)}
-                className="text-blue-600 font-bold text-sm hover:underline"
-              >
-                {isChangingPassword ? "Cancel" : "Change Password"}
-              </button>
-            </div>
-
-            {isChangingPassword && (
-              <form onSubmit={handleChangePassword} className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <input 
-                    type="password" 
-                    placeholder="Current Password"
-                    className="px-4 py-3 bg-gray-50 border rounded-xl"
-                    value={passwordForm.currentPassword}
-                    onChange={e => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
-                    required
-                  />
-                  <input 
-                    type="password" 
-                    placeholder="New Password"
-                    className="px-4 py-3 bg-gray-50 border rounded-xl"
-                    value={passwordForm.newPassword}
-                    onChange={e => setPasswordForm({...passwordForm, newPassword: e.target.value})}
-                    required
-                  />
-                  <input 
-                    type="password" 
-                    placeholder="Confirm New Password"
-                    className="px-4 py-3 bg-gray-50 border rounded-xl"
-                    value={passwordForm.confirmPassword}
-                    onChange={e => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
-                    required
-                  />
-                </div>
-                <button type="submit" className="bg-gray-900 text-white px-6 py-2 rounded-xl font-bold hover:bg-black">
-                  Update Password
-                </button>
-              </form>
-            )}
-            {!isChangingPassword && (
-              <p className="text-sm text-gray-500">Keep your account safe by using a strong password and changing it regularly.</p>
-            )}
+                ))}
+                {phones.length === 0 && (
+                   <div className="text-center py-12 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+                      <p className="font-black text-slate-300 uppercase text-xs tracking-widest">No phone numbers linked</p>
+                   </div>
+                )}
+             </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="bg-white rounded-[2.5rem] shadow-xl p-8 border">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-6">
-              <Camera size={18} className="text-blue-600" /> Photo Gallery
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {images.map(img => (
-                <div key={img.userImageID} className="aspect-square rounded-2xl overflow-hidden relative group border-2 border-transparent hover:border-blue-500 transition-all">
-                  <img src={img.imageURL} alt="Gallery" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-2">
-                    <button 
-                      onClick={() => deleteImage(img.userImageID)}
-                      className="p-2 bg-red-600 text-white rounded-lg hover:scale-110 transition-transform"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+        {/* Sidebar - Security Hub */}
+        <div className="lg:col-span-4 space-y-10">
+           <div className="bg-slate-900 rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden">
+              <div className="relative z-10 space-y-10">
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center"><Lock size={22} className="text-indigo-400" /></div>
+                   <h3 className="text-2xl font-black tracking-tight">Security Settings</h3>
                 </div>
-              ))}
-              <label className="aspect-square rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-50 cursor-pointer hover:border-blue-300 transition-all">
-                <Upload size={20} />
-                <span className="text-[10px] font-bold uppercase mt-2">Add New</span>
-                <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-              </label>
-            </div>
-          </div>
+                
+                <div className="space-y-6">
+                   <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10">
+                      <div className="flex items-center gap-4 mb-6">
+                        <Key size={30} className="text-amber-500" />
+                        <div>
+                           <p className="text-base font-black">Change Password</p>
+                           <p className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Update your credentials</p>
+                        </div>
+                      </div>
+
+                      {isChangingPass ? (
+                        <form onSubmit={handleChangePassword} className="space-y-4 animate-in slide-in-from-top-4">
+                           {passError && <div className="text-rose-400 text-xs font-bold flex items-center gap-2 bg-rose-500/10 p-3 rounded-xl border border-rose-500/20"><AlertCircle size={14}/> {passError}</div>}
+                           {passSuccess && <div className="text-emerald-400 text-xs font-bold flex items-center gap-2 bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20"><CheckCircle2 size={14}/> {passSuccess}</div>}
+                           
+                           <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-black text-slate-500 ml-1">Current Password</label>
+                              <input 
+                                type="password" 
+                                required
+                                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-sm" 
+                                value={passForm.currentPassword}
+                                onChange={e => setPassForm({...passForm, currentPassword: e.target.value})}
+                              />
+                           </div>
+                           <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-black text-slate-500 ml-1">New Password</label>
+                              <input 
+                                type="password" 
+                                required
+                                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-sm" 
+                                value={passForm.newPassword}
+                                onChange={e => setPassForm({...passForm, newPassword: e.target.value})}
+                              />
+                           </div>
+                           <div className="space-y-1">
+                              <label className="text-[9px] uppercase font-black text-slate-500 ml-1">Confirm New Password</label>
+                              <input 
+                                type="password" 
+                                required
+                                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-sm" 
+                                value={passForm.confirmPassword}
+                                onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})}
+                              />
+                           </div>
+                           <div className="flex gap-2 pt-2">
+                             <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all">Confirm Change</button>
+                             <button type="button" onClick={() => setIsChangingPass(false)} className="px-4 text-slate-500 hover:text-white transition-colors">Cancel</button>
+                           </div>
+                        </form>
+                      ) : (
+                        <button 
+                          onClick={() => setIsChangingPass(true)} 
+                          className="w-full py-5 bg-white text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-indigo-500 hover:text-white transition-all"
+                        >
+                          Change Credentials
+                        </button>
+                      )}
+                   </div>
+                </div>
+              </div>
+           </div>
         </div>
       </div>
     </div>
   );
 };
+
+const InputGroup: React.FC<{ label: string, value: string, onChange: (v: string) => void }> = ({ label, value, onChange }) => (
+  <div className="space-y-2">
+    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+    <input 
+      type="text" 
+      required 
+      className="w-full px-6 py-4.5 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-600 focus:bg-white outline-none font-bold text-lg transition-all" 
+      value={value} 
+      onChange={e => onChange(e.target.value)} 
+    />
+  </div>
+);
+
+const StaticDetail: React.FC<{ label: string, value: string }> = ({ label, value }) => (
+  <div className="p-10 bg-slate-50/50 rounded-[2.5rem] border border-slate-100 flex flex-col group hover:bg-white hover:shadow-2xl transition-all duration-500">
+    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 opacity-60">{label}</span>
+    <span className="text-2xl font-black text-slate-900 tracking-tighter truncate">{value}</span>
+  </div>
+);
 
 export default Profile;

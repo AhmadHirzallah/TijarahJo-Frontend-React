@@ -23,15 +23,6 @@ export enum RoleID {
   Moderator = 3
 }
 
-export interface PhoneNumber {
-  phoneID: number;
-  userID: number;
-  phoneNumber: string;
-  isPrimary: boolean;
-  createdAt: string;
-  isDeleted: boolean;
-}
-
 export interface User {
   userID: number;
   username: string;
@@ -79,6 +70,7 @@ export interface PostDetails extends Post {
   ownerFirstName: string;
   ownerLastName: string;
   ownerFullName: string;
+  ownerPhone?: string;
   roleID: RoleID;
   roleName: string;
   categoryName: string;

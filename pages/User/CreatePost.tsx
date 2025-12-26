@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { postService } from '../../services/postService';
 import { categoryService } from '../../services/categoryService';
 import { Category } from '../../types/api';
-import { ShoppingBag, Image as ImageIcon, CheckCircle, AlertCircle, Upload } from 'lucide-react';
+import { ShoppingBag, CheckCircle, AlertCircle, Upload } from 'lucide-react';
 import Loader from '../../components/UI/Loader';
 
 const CreatePost: React.FC = () => {
@@ -43,16 +43,12 @@ const CreatePost: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      // 1. Create the post
       const post = await postService.createPost(formData);
-      
-      // 2. Upload images if any
       if (selectedImages.length > 0) {
         for (const file of selectedImages) {
           await postService.uploadImage(post.postID, file);
         }
       }
-      
       setSuccess(true);
       setTimeout(() => window.location.href = '#/my-posts', 2000);
     } catch (err: any) {
@@ -69,7 +65,7 @@ const CreatePost: React.FC = () => {
           <CheckCircle size={40} />
         </div>
         <h2 className="text-3xl font-bold text-gray-900">Listing Created!</h2>
-        <p className="text-gray-500 mt-4">Your item is now live on TijarahJo. Redirecting you to your listings...</p>
+        <p className="text-gray-500 mt-4">Your item is now live. Redirecting...</p>
       </div>
     );
   }
@@ -80,7 +76,7 @@ const CreatePost: React.FC = () => {
         <div className="bg-blue-600 p-8 text-white flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">List a New Item</h1>
-            <p className="text-blue-100 mt-1">Fill in the details to reach thousands of buyers</p>
+            <p className="text-blue-100 mt-1">Fill in the details for buyers in Jordan</p>
           </div>
           <ShoppingBag size={48} className="opacity-20" />
         </div>
@@ -99,15 +95,14 @@ const CreatePost: React.FC = () => {
                 <input
                   required
                   type="text"
-                  placeholder="e.g. iPhone 15 Pro Max 256GB"
+                  placeholder="e.g. iPhone 15 Pro Max"
                   className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600"
                   onChange={e => setFormData({...formData, postTitle: e.target.value})}
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Price ($)</label>
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Price (JD)</label>
                   <input
                     required
                     type="number"
@@ -131,61 +126,37 @@ const CreatePost: React.FC = () => {
                   </select>
                 </div>
               </div>
-
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Description</label>
                 <textarea
                   required
                   rows={6}
-                  placeholder="Tell buyers about the condition, features, and why you are selling..."
+                  placeholder="Details about the condition and features..."
                   className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600"
                   onChange={e => setFormData({...formData, postDescription: e.target.value})}
                 />
               </div>
             </div>
-
             <div className="space-y-6">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Product Images</label>
               <div className="relative group border-2 border-dashed border-gray-200 rounded-[2rem] p-10 flex flex-col items-center justify-center hover:bg-gray-50 hover:border-blue-300 transition-all cursor-pointer">
-                <input 
-                  type="file" 
-                  multiple 
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer" 
-                />
-                <div className="bg-blue-50 p-4 rounded-full text-blue-600 mb-4 group-hover:scale-110 transition-transform">
-                  <Upload size={32} />
-                </div>
+                <input type="file" multiple accept="image/*" onChange={handleImageChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                <div className="bg-blue-50 p-4 rounded-full text-blue-600 mb-4 group-hover:scale-110 transition-transform"><Upload size={32} /></div>
                 <p className="font-bold text-gray-700">Click to upload photos</p>
-                <p className="text-xs text-gray-400 mt-2">Up to 5MB per image. JPG, PNG, WEBP.</p>
               </div>
-
               {selectedImages.length > 0 && (
                 <div className="grid grid-cols-3 gap-3">
                   {selectedImages.map((file, i) => (
-                    <div key={i} className="aspect-square rounded-xl overflow-hidden relative group shadow-sm">
-                      <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white text-[10px] font-bold">Ready</span>
-                      </div>
-                    </div>
+                    <div key={i} className="aspect-square rounded-xl overflow-hidden relative group shadow-sm"><img src={URL.createObjectURL(file)} className="w-full h-full object-cover" /></div>
                   ))}
                 </div>
               )}
             </div>
           </div>
-
           <div className="pt-8 border-t flex items-center justify-end gap-4">
-             <button type="button" onClick={() => window.history.back()} className="px-8 py-3 rounded-full font-bold text-gray-500 hover:bg-gray-100 transition-all">
-               Cancel
-             </button>
-             <button
-               type="submit"
-               disabled={loading}
-               className="bg-blue-600 text-white px-12 py-3 rounded-full font-bold text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 disabled:opacity-50"
-             >
-               {loading ? 'Creating Listing...' : 'Publish Item'}
+             <button type="button" onClick={() => window.history.back()} className="px-8 py-3 rounded-full font-bold text-gray-500 hover:bg-gray-100 transition-all">Cancel</button>
+             <button type="submit" disabled={loading} className="bg-blue-600 text-white px-12 py-3 rounded-full font-bold text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 disabled:opacity-50">
+               {loading ? 'Creating...' : 'Publish Item'}
              </button>
           </div>
         </form>

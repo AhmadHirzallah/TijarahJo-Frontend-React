@@ -1,12 +1,13 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { postService } from '../../services/postService';
 import { categoryService } from '../../services/categoryService';
 import { PostDetails, Category } from '../../types/api';
 import Loader from '../../components/UI/Loader';
 import ErrorState from '../../components/UI/ErrorState';
-import { Search, SlidersHorizontal, Grid, List as ListIcon, MapPin, Heart } from 'lucide-react';
+import { Search, SlidersHorizontal, Grid, List as ListIcon, MapPin, Package } from 'lucide-react';
+import { BACKEND_URL } from '../../services/api';
 
 const Browse: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,7 +28,8 @@ const Browse: React.FC = () => {
         categoryService.getAll(),
         postService.getPosts({
           categoryID: currentCategory ? parseInt(currentCategory) : undefined,
-          rowsPerPage: 12
+          rowsPerPage: 12,
+          q: searchQuery
         })
       ]);
       setCategories(catData);
@@ -45,6 +47,13 @@ const Browse: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  const getAbsoluteImageUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+    return `${BACKEND_URL}${normalizedPath}`;
+  };
+
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 flex justify-center">
@@ -56,7 +65,6 @@ const Browse: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <div className="flex flex-col md:flex-row gap-8">
-        {/* Sidebar Filters */}
         <aside className="w-full md:w-64 shrink-0 space-y-8">
           <div className="bg-white p-6 rounded-3xl shadow-sm border">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -82,7 +90,6 @@ const Browse: React.FC = () => {
           </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-900">
@@ -101,50 +108,41 @@ const Browse: React.FC = () => {
             <Loader />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {posts.map(post => (
-                <a key={post.postID} href={`#/post/${post.postID}`} className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-gray-100 flex flex-col">
-                  <div className="relative h-56 overflow-hidden">
-                    <img 
-                      src={post.primaryImageUrl || `https://picsum.photos/400/300?random=${post.postID}`} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                      alt={post.postTitle} 
-                    />
-                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-600">
-                      {post.categoryName}
-                    </div>
-                    <button className="absolute top-4 right-4 p-2 rounded-full bg-white/80 hover:bg-white text-gray-400 hover:text-red-500 transition-colors shadow-sm">
-                      <Heart size={16} />
-                    </button>
-                  </div>
-                  <div className="p-6 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">{post.postTitle}</h3>
-                      <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
-                        <MapPin size={14} /> Amman, Jordan
+              {posts.map(post => {
+                const postRawImage = post.primaryImageUrl || (post.images && post.images.length > 0 ? post.images[0].postImageURL : null);
+                const cardImage = getAbsoluteImageUrl(postRawImage);
+                return (
+                  <a key={post.postID} href={`#/post/${post.postID}`} className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-gray-100 flex flex-col">
+                    <div className="relative h-56 overflow-hidden bg-slate-50">
+                      {cardImage ? (
+                        <img src={cardImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={post.postTitle} />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-slate-300">
+                          <Package size={48} className="mb-2 opacity-40 group-hover:scale-110 transition-transform" />
+                          <span className="text-[9px] font-black uppercase tracking-widest opacity-60">No Media</span>
+                        </div>
+                      )}
+                      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                        {post.categoryName}
                       </div>
                     </div>
-                    <div className="mt-4 pt-4 border-t flex items-center justify-between">
-                      <span className="text-xl font-black text-blue-600">${post.price.toLocaleString()}</span>
-                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                        {new Date(post.createdAt).toLocaleDateString()}
+                    <div className="p-6 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">{post.postTitle}</h3>
+                        <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
+                          <MapPin size={14} /> Amman, Jordan
+                        </div>
+                      </div>
+                      <div className="mt-4 pt-4 border-t flex items-center justify-between">
+                        <span className="text-xl font-black text-blue-600">{post.price.toLocaleString()} JD</span>
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          {new Date(post.createdAt).toLocaleDateString()}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          )}
-
-          {posts.length === 0 && !loading && (
-            <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-gray-100">
-              <div className="mx-auto w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
-                <Search size={40} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">No results found</h3>
-              <p className="text-gray-500 mt-2">Try adjusting your filters or search keywords.</p>
-              <button onClick={() => setSearchParams({})} className="mt-6 text-blue-600 font-bold hover:underline">
-                Clear all filters
-              </button>
+                  </a>
+                );
+              })}
             </div>
           )}
         </main>

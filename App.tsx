@@ -1,6 +1,7 @@
 
 import React, { Suspense, lazy } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+// Changed import from 'react-router-dom' to 'react-router' to fix export missing errors
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Layout/Navbar';
 import Loader from './components/UI/Loader';
