@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 import { UserPlus, Mail, Lock, User as UserIcon, AlertCircle, ArrowRight, Phone, CheckCircle2 } from 'lucide-react';
+import { validatePassword, getPasswordStrengthColor, getPasswordStrengthBg } from '../../utils/passwordValidation';
 
 const Register: React.FC = () => {
   const { login } = useAuth();
@@ -16,6 +17,7 @@ const Register: React.FC = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [passwordValidation, setPasswordValidation] = useState<ReturnType<typeof validatePassword> | null>(null);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -54,8 +56,9 @@ const Register: React.FC = () => {
     }
 
     // Password validation
-    if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters.";
+    const passwordValidationResult = validatePassword(formData.password);
+    if (!passwordValidationResult.isValid) {
+      newErrors.password = passwordValidationResult.error || "Password does not meet requirements.";
     }
 
     setErrors(newErrors);
@@ -185,12 +188,63 @@ const Register: React.FC = () => {
               <input 
                 type="password" 
                 required 
-                placeholder="Minimum 6 characters"
-                className={`w-full pl-14 pr-6 py-4 bg-slate-50 border-2 rounded-2xl transition-all outline-none font-bold ${errors.password ? 'border-rose-200 bg-rose-50/30' : 'border-transparent focus:border-indigo-600 focus:bg-white'}`} 
+                placeholder="Minimum 8 characters with uppercase, lowercase, number, and special character"
+                className={`w-full pl-14 pr-6 py-4 bg-slate-50 border-2 rounded-2xl transition-all outline-none font-bold ${errors.password ? 'border-rose-200 bg-rose-50/30' : passwordValidation?.isValid ? 'border-emerald-200 bg-emerald-50/30' : 'border-transparent focus:border-indigo-600 focus:bg-white'}`} 
                 value={formData.password} 
-                onChange={(e) => setFormData({...formData, password: e.target.value})} 
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFormData({...formData, password: value});
+                  const validation = validatePassword(value);
+                  setPasswordValidation(validation);
+                  if (validation.isValid && errors.password) {
+                    const newErrors = {...errors};
+                    delete newErrors.password;
+                    setErrors(newErrors);
+                  }
+                }} 
               />
             </div>
+            {formData.password && passwordValidation && (
+              <div className="mt-2 space-y-2">
+                {passwordValidation.strength && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full ${getPasswordStrengthBg(passwordValidation.strength)} transition-all duration-300`}
+                        style={{ width: passwordValidation.strength === 'strong' ? '100%' : passwordValidation.strength === 'medium' ? '66%' : '33%' }}
+                      />
+                    </div>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${getPasswordStrengthColor(passwordValidation.strength)}`}>
+                      {passwordValidation.strength}
+                    </span>
+                  </div>
+                )}
+                {passwordValidation.requirements && (
+                  <div className="grid grid-cols-2 gap-1 text-[9px]">
+                    <div className={`flex items-center gap-1.5 ${passwordValidation.requirements.minLength ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <CheckCircle2 size={12} className={passwordValidation.requirements.minLength ? 'fill-emerald-600 text-white' : ''} />
+                      <span className="font-bold">8+ characters</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${passwordValidation.requirements.hasUpperCase ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <CheckCircle2 size={12} className={passwordValidation.requirements.hasUpperCase ? 'fill-emerald-600 text-white' : ''} />
+                      <span className="font-bold">Uppercase</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${passwordValidation.requirements.hasLowerCase ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <CheckCircle2 size={12} className={passwordValidation.requirements.hasLowerCase ? 'fill-emerald-600 text-white' : ''} />
+                      <span className="font-bold">Lowercase</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${passwordValidation.requirements.hasNumber ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <CheckCircle2 size={12} className={passwordValidation.requirements.hasNumber ? 'fill-emerald-600 text-white' : ''} />
+                      <span className="font-bold">Number</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 col-span-2 ${passwordValidation.requirements.hasSpecialChar ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <CheckCircle2 size={12} className={passwordValidation.requirements.hasSpecialChar ? 'fill-emerald-600 text-white' : ''} />
+                      <span className="font-bold">Special character (!@#$%^&*)</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {errors.password && <p className="text-[10px] text-rose-500 font-bold ml-1 mt-1">{errors.password}</p>}
           </div>
 

@@ -5,6 +5,7 @@ import api, { BACKEND_URL } from '../../services/api';
 import { User } from '../../types/api';
 import { Camera, Trash2, Edit2, Lock, Phone, Plus, ShieldCheck, Key, Star, CheckCircle2, AlertCircle } from 'lucide-react';
 import Loader from '../../components/UI/Loader';
+import { validatePassword, getPasswordStrengthColor, getPasswordStrengthBg } from '../../utils/passwordValidation';
 
 interface PhoneData {
   phoneID: number;
@@ -33,6 +34,7 @@ const Profile: React.FC = () => {
   });
   const [passError, setPassError] = useState('');
   const [passSuccess, setPassSuccess] = useState('');
+  const [passwordValidation, setPasswordValidation] = useState<ReturnType<typeof validatePassword> | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -77,8 +79,20 @@ const Profile: React.FC = () => {
     setPassError('');
     setPassSuccess('');
 
+    // Validate new password
+    const passwordValidationResult = validatePassword(passForm.newPassword);
+    if (!passwordValidationResult.isValid) {
+      setPassError(passwordValidationResult.error || "New password does not meet requirements.");
+      return;
+    }
+
     if (passForm.newPassword !== passForm.confirmPassword) {
       setPassError("New passwords do not match.");
+      return;
+    }
+
+    if (!passForm.currentPassword.trim()) {
+      setPassError("Current password is required.");
       return;
     }
 
@@ -89,6 +103,7 @@ const Profile: React.FC = () => {
       });
       setPassSuccess("Password updated successfully.");
       setPassForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordValidation(null);
       setTimeout(() => setIsChangingPass(false), 2000);
     } catch (err: any) {
       setPassError(err.response?.data?.detail || "Failed to update password. Verify current password.");
@@ -299,20 +314,82 @@ const Profile: React.FC = () => {
                               <input 
                                 type="password" 
                                 required
-                                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-sm" 
+                                className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm transition-all ${passwordValidation?.isValid ? 'border-emerald-500/50' : passError ? 'border-rose-500/50' : 'border-white/10 focus:border-indigo-500'}`}
                                 value={passForm.newPassword}
-                                onChange={e => setPassForm({...passForm, newPassword: e.target.value})}
+                                onChange={e => {
+                                  const value = e.target.value;
+                                  setPassForm({...passForm, newPassword: value});
+                                  const validation = validatePassword(value);
+                                  setPasswordValidation(validation);
+                                  if (validation.isValid) {
+                                    setPassError('');
+                                  }
+                                }}
+                                placeholder="Min 8 chars: A-Z, a-z, 0-9, special"
                               />
+                              {passForm.newPassword && passwordValidation && (
+                                <div className="mt-2 space-y-2">
+                                  {passwordValidation.strength && (
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                                        <div 
+                                          className={`h-full ${getPasswordStrengthBg(passwordValidation.strength)} transition-all duration-300`}
+                                          style={{ width: passwordValidation.strength === 'strong' ? '100%' : passwordValidation.strength === 'medium' ? '66%' : '33%' }}
+                                        />
+                                      </div>
+                                      <span className={`text-[8px] font-black uppercase tracking-wider ${getPasswordStrengthColor(passwordValidation.strength)}`}>
+                                        {passwordValidation.strength}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {passwordValidation.requirements && (
+                                    <div className="grid grid-cols-2 gap-1 text-[8px]">
+                                      <div className={`flex items-center gap-1 ${passwordValidation.requirements.minLength ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                        <CheckCircle2 size={10} className={passwordValidation.requirements.minLength ? 'fill-emerald-400 text-white' : ''} />
+                                        <span className="font-bold">8+ chars</span>
+                                      </div>
+                                      <div className={`flex items-center gap-1 ${passwordValidation.requirements.hasUpperCase ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                        <CheckCircle2 size={10} className={passwordValidation.requirements.hasUpperCase ? 'fill-emerald-400 text-white' : ''} />
+                                        <span className="font-bold">A-Z</span>
+                                      </div>
+                                      <div className={`flex items-center gap-1 ${passwordValidation.requirements.hasLowerCase ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                        <CheckCircle2 size={10} className={passwordValidation.requirements.hasLowerCase ? 'fill-emerald-400 text-white' : ''} />
+                                        <span className="font-bold">a-z</span>
+                                      </div>
+                                      <div className={`flex items-center gap-1 ${passwordValidation.requirements.hasNumber ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                        <CheckCircle2 size={10} className={passwordValidation.requirements.hasNumber ? 'fill-emerald-400 text-white' : ''} />
+                                        <span className="font-bold">0-9</span>
+                                      </div>
+                                      <div className={`flex items-center gap-1 col-span-2 ${passwordValidation.requirements.hasSpecialChar ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                        <CheckCircle2 size={10} className={passwordValidation.requirements.hasSpecialChar ? 'fill-emerald-400 text-white' : ''} />
+                                        <span className="font-bold">Special (!@#$%)</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                            </div>
                            <div className="space-y-1">
                               <label className="text-[9px] uppercase font-black text-slate-500 ml-1">Confirm New Password</label>
                               <input 
                                 type="password" 
                                 required
-                                className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-sm" 
+                                className={`w-full px-5 py-4 bg-white/5 border rounded-xl outline-none text-sm transition-all ${passForm.confirmPassword && passForm.newPassword === passForm.confirmPassword ? 'border-emerald-500/50' : passForm.confirmPassword && passForm.newPassword !== passForm.confirmPassword ? 'border-rose-500/50' : 'border-white/10 focus:border-indigo-500'}`}
                                 value={passForm.confirmPassword}
-                                onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})}
+                                onChange={e => {
+                                  setPassForm({...passForm, confirmPassword: e.target.value});
+                                  setPassError('');
+                                }}
+                                placeholder="Re-enter new password"
                               />
+                              {passForm.confirmPassword && passForm.newPassword !== passForm.confirmPassword && (
+                                <p className="text-[8px] text-rose-400 font-bold mt-1">Passwords do not match</p>
+                              )}
+                              {passForm.confirmPassword && passForm.newPassword === passForm.confirmPassword && passwordValidation?.isValid && (
+                                <p className="text-[8px] text-emerald-400 font-bold mt-1 flex items-center gap-1">
+                                  <CheckCircle2 size={10} /> Passwords match
+                                </p>
+                              )}
                            </div>
                            <div className="flex gap-2 pt-2">
                              <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all">Confirm Change</button>
@@ -321,7 +398,13 @@ const Profile: React.FC = () => {
                         </form>
                       ) : (
                         <button 
-                          onClick={() => setIsChangingPass(true)} 
+                          onClick={() => {
+                            setIsChangingPass(true);
+                            setPassForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                            setPasswordValidation(null);
+                            setPassError('');
+                            setPassSuccess('');
+                          }} 
                           className="w-full py-5 bg-white text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-indigo-500 hover:text-white transition-all"
                         >
                           Change Credentials
