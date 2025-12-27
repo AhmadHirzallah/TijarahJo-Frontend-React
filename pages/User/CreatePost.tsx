@@ -14,6 +14,7 @@ const CreatePost: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [showDebug, setShowDebug] = useState(false); // Hidden by default
   
   const [formData, setFormData] = useState({
     postTitle: '',
@@ -25,7 +26,33 @@ const CreatePost: React.FC = () => {
 
   useEffect(() => {
     categoryService.getAll().then(setCategories);
+    
+    // DEBUG: Log user information
+    console.log('👤 Current user:', user);
+    console.log('📝 Initial form data:', formData);
+    
+    // Secret debug mode: Press Ctrl+Shift+D three times
+    let ctrlShiftDCount = 0;
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        ctrlShiftDCount++;
+        if (ctrlShiftDCount >= 3) {
+          setShowDebug(true);
+          console.log('🔓 Debug mode activated');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
+
+  // Update userID when user changes
+  useEffect(() => {
+    if (user?.userID) {
+      setFormData(prev => ({ ...prev, userID: user.userID }));
+      console.log('🔄 Updated userID in form:', user.userID);
+    }
+  }, [user]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -42,17 +69,52 @@ const CreatePost: React.FC = () => {
     
     setLoading(true);
     setError('');
+    
+    // DEBUG: Log the data being sent
+    console.log('📤 Creating post with data:', formData);
+    
     try {
       const post = await postService.createPost(formData);
+      console.log('✅ Post created successfully:', post);
+      
       if (selectedImages.length > 0) {
+        console.log(`📸 Uploading ${selectedImages.length} images...`);
         for (const file of selectedImages) {
           await postService.uploadImage(post.postID, file);
+          console.log(`✅ Uploaded image: ${file.name}`);
         }
       }
       setSuccess(true);
       setTimeout(() => window.location.href = '#/my-posts', 2000);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create listing');
+      // DEBUG: Log detailed error information
+      console.error('❌ Error creating post:', err);
+      console.error('❌ Error response:', err.response);
+      console.error('❌ Error data:', err.response?.data);
+      console.error('❌ Error status:', err.response?.status);
+      
+      // 🚨 LOG THE ACTUAL ERROR MESSAGE
+      console.error('🚨 BACKEND ERROR MESSAGE:', err.response?.data?.detail || err.response?.data?.message || 'No detail provided');
+      console.error('🚨 FULL ERROR OBJECT:', JSON.stringify(err.response?.data, null, 2));
+      
+      // Extract user-friendly error message
+      let userMessage = '';
+      const status = err.response?.status;
+      const backendError = err.response?.data?.detail || err.response?.data?.message;
+      
+      if (status === 400) {
+        userMessage = backendError || 'Invalid data. Please check all fields and try again.';
+      } else if (status === 401) {
+        userMessage = 'Session expired. Please log out and log back in.';
+      } else if (status === 403) {
+        userMessage = 'You do not have permission to perform this action.';
+      } else if (status === 500) {
+        userMessage = 'Server error. Please try again later or contact support.';
+      } else {
+        userMessage = backendError || 'Failed to create listing. Please try again.';
+      }
+      
+      setError(userMessage);
     } finally {
       setLoading(false);
     }
@@ -83,9 +145,28 @@ const CreatePost: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="p-8 space-y-8">
           {error && (
-            <div className="bg-red-50 text-red-700 p-4 rounded-xl flex items-center gap-3 text-sm font-medium border border-red-100">
-              <AlertCircle size={20} /> {error}
+            <div className="bg-red-50 text-red-700 p-5 rounded-2xl border-2 border-red-200 shadow-sm">
+              <div className="flex items-start gap-3">
+                <AlertCircle size={24} className="shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-base mb-1">Unable to Create Listing</p>
+                  <p className="text-sm">{error}</p>
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* DEBUG: Hidden by default, press Ctrl+Shift+D three times to reveal */}
+          {showDebug && (
+            <details className="bg-gray-50 p-4 rounded-xl text-xs border-2 border-dashed border-gray-300">
+              <summary className="font-bold cursor-pointer text-gray-600">🔓 Debug Mode Active (Hidden from users)</summary>
+              <pre className="mt-2 text-gray-700 overflow-auto">{JSON.stringify(formData, null, 2)}</pre>
+              <div className="mt-2 text-gray-600">
+                <p>User ID: {user?.userID || 'NOT SET'}</p>
+                <p>Categories loaded: {categories.length}</p>
+                <p>Images selected: {selectedImages.length}</p>
+              </div>
+            </details>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

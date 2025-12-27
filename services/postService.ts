@@ -1,10 +1,32 @@
 
 import api from './api';
-import { Post, PostDetails, PaginatedResponse, Review } from '../types/api';
+import { Post, PostDetails, PaginatedResponse, Review, UserPostsResponse } from '../types/api';
+
+interface GetMyPostsParams {
+  pageNumber?: number;
+  rowsPerPage?: number;
+  includeDeleted?: boolean;
+}
 
 export const postService = {
   async getPosts(params?: any): Promise<PaginatedResponse<PostDetails>> {
     const { data } = await api.get<PaginatedResponse<PostDetails>>('/posts/paginated', { params });
+    return data;
+  },
+
+  /**
+   * Get current authenticated user's posts
+   */
+  async getMyPosts(params?: GetMyPostsParams): Promise<UserPostsResponse> {
+    const { data } = await api.get<UserPostsResponse>('/posts/my', { params });
+    return data;
+  },
+
+  /**
+   * Get posts by a specific user ID
+   */
+  async getPostsByUser(userId: number, params?: GetMyPostsParams): Promise<UserPostsResponse> {
+    const { data } = await api.get<UserPostsResponse>(`/posts/user/${userId}`, { params });
     return data;
   },
 

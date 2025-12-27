@@ -134,3 +134,32 @@ export interface AdminDashboardStats {
   totalCategories: number;
   totalRoles: number;
 }
+
+// User Post Response (for My Posts page)
+export interface UserPost {
+  postID: number;
+  userID: number;
+  categoryID: number;
+  categoryName: string | null;
+  postTitle: string;
+  postDescription: string | null;
+  price: number;
+  status: PostStatus;
+  statusName: string;
+  createdAt: string;
+  isDeleted: boolean;
+  primaryImageUrl: string | null;
+  images: PostImage[];
+  imageCount: number;
+}
+
+// Paginated Response for User Posts
+export interface UserPostsResponse {
+  items: UserPost[];
+  pageNumber: number;
+  rowsPerPage: number;
+  totalCount: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
