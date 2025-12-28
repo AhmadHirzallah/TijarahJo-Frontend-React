@@ -34,7 +34,7 @@ interface PhoneData {
 
 const Profile: React.FC = () => {
 
-  const { user, profileImage, refreshProfileImage } = useAuth();
+  const { user, profileImage, refreshProfileImage, refreshUser } = useAuth();
 
   const [profile, setProfile] = useState<User | null>(null);
 
@@ -133,6 +133,9 @@ const Profile: React.FC = () => {
       setProfile(res.data);
 
       localStorage.setItem('user_data', JSON.stringify(res.data));
+
+      // Refresh the user context so navbar and other components update
+      refreshUser();
 
       setIsEditing(false);
 
