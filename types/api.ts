@@ -1,9 +1,8 @@
 
 export enum UserStatus {
   Active = 0,
-  Inactive = 1,
-  Banned = 2,
-  Suspended = 3
+  Verified = 1,
+  Banned = 2
 }
 
 export enum PostStatus {

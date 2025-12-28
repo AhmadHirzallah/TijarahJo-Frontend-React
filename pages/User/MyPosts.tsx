@@ -169,7 +169,7 @@ const MyPosts: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {posts.map(post => {
+              {posts.filter(post => !post.isDeleted).map(post => {
                 // Get image URL - prefer primaryImageUrl, fallback to first image
                 const imageUrl = getAbsoluteImageUrl(
                   post.primaryImageUrl || 

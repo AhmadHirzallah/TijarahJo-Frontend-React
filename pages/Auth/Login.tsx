@@ -1,22 +1,66 @@
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { Mail, Lock, LogIn, AlertCircle } from "lucide-react";
+import { Mail, Lock, LogIn, AlertCircle, Ban } from "lucide-react";
+import { useNavigate } from "react-router";
+
+type ErrorType = 'invalid_credentials' | 'account_disabled' | 'account_banned' | 'validation_error' | 'server_error';
 
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({ login: "", password: "" });
   const [error, setError] = useState("");
+  const [errorType, setErrorType] = useState<ErrorType | null>(null);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setErrorType(null);
     setLoading(true);
+    
     try {
       await login(formData);
       window.location.href = "#/";
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Invalid login credentials");
+      const status = err.response?.status;
+      const data = err.response?.data;
+      
+      console.error('Login error:', { status, data });
+      
+      // Handle banned account (403)
+      if (status === 403) {
+        setErrorType('account_banned');
+        setError(data?.detail || 'Your account has been banned. Please contact support.');
+        // Redirect to banned page after 2 seconds
+        setTimeout(() => navigate('/account-banned'), 2000);
+        return;
+      }
+      
+      // Handle account disabled (401 with specific title)
+      if (status === 401 && data?.title === 'Account disabled') {
+        setErrorType('account_disabled');
+        setError(data?.detail || 'This account has been deactivated. Please contact support.');
+        return;
+      }
+      
+      // Handle invalid credentials (401)
+      if (status === 401) {
+        setErrorType('invalid_credentials');
+        setError(data?.detail || 'Invalid username or password.');
+        return;
+      }
+      
+      // Handle validation errors (400)
+      if (status === 400) {
+        setErrorType('validation_error');
+        setError(data?.detail || data?.title || 'Please check your input.');
+        return;
+      }
+      
+      // Server error or unknown
+      setErrorType('server_error');
+      setError('An unexpected error occurred. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -39,8 +83,29 @@ const Login: React.FC = () => {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3 text-sm font-medium">
-              <AlertCircle size={20} /> {error}
+            <div className={`p-4 rounded-xl flex items-start gap-3 text-sm font-medium ${
+              errorType === 'account_banned' ? 'bg-red-50 border border-red-500 text-red-800' :
+              errorType === 'account_disabled' ? 'bg-yellow-50 border border-yellow-400 text-yellow-700' :
+              errorType === 'invalid_credentials' ? 'bg-red-50 border border-red-200 text-red-700' :
+              errorType === 'validation_error' ? 'bg-orange-50 border border-orange-400 text-orange-700' :
+              'bg-gray-50 border border-gray-400 text-gray-700'
+            }`}>
+              <div className="flex-shrink-0 mt-0.5">
+                {errorType === 'account_banned' ? <Ban size={20} /> : <AlertCircle size={20} />}
+              </div>
+              <div className="flex-1">
+                <p>{error}</p>
+                {errorType === 'account_banned' && (
+                  <p className="mt-1 text-xs">Redirecting to information page...</p>
+                )}
+                {errorType === 'account_disabled' && (
+                  <p className="mt-2">
+                    <a href="mailto:support@tijarahjo.com" className="font-bold underline">
+                      Contact Support
+                    </a>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

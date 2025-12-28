@@ -9,12 +9,12 @@ import api from '../../services/api';
 import Loader from '../../components/UI/Loader';
 import { 
   Users, Package, Grid, Shield, TrendingUp, Check, Search, Trash2, Ban, Eye, Settings, Plus, Edit2, 
-  Activity, BarChart3, Database, ShieldAlert, X, AlertTriangle, CheckCircle2, ShieldCheck, ExternalLink
+  Activity, BarChart3, Database, ShieldAlert, X, AlertTriangle, CheckCircle2, ShieldCheck, ExternalLink, Save, Phone, Mail
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Link } from 'react-router';
 
-type AdminTab = 'overview' | 'users' | 'posts' | 'categories';
+type AdminTab = 'overview' | 'users' | 'posts' | 'categories' | 'settings';
 
 const Dashboard: React.FC = () => {
   const { user: currentUser, profileImage, refreshProfileImage } = useAuth();
@@ -31,6 +31,13 @@ const Dashboard: React.FC = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryName, setCategoryName] = useState('');
+  
+  // Support settings
+  const [supportEmail, setSupportEmail] = useState(localStorage.getItem('support_email') || 'support@tijarahjo.com');
+  const [supportWhatsApp, setSupportWhatsApp] = useState(localStorage.getItem('support_whatsapp') || '962791234567');
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [whatsappError, setWhatsappError] = useState('');
 
   const refreshData = useCallback(async () => {
     try {
@@ -38,10 +45,10 @@ const Dashboard: React.FC = () => {
       setStats(statsData);
       
       if (activeTab === 'users') {
-        const res = await adminService.getAllUsers({ includeDeleted: true });
+        const res = await adminService.getAllUsers({ includeDeleted: false });
         setUserList(res.users);
       } else if (activeTab === 'posts') {
-        const res = await adminService.getAllPosts({ includeDeleted: true });
+        const res = await adminService.getAllPosts({ includeDeleted: false });
         setPostList(res.posts);
       } else if (activeTab === 'categories') {
         const cats = await categoryService.getAll();
@@ -86,6 +93,47 @@ const Dashboard: React.FC = () => {
       await refreshData();
       alert(`Listing #${postId} is now ${status === PostStatus.Active ? 'Published' : 'Restricted'}.`);
     } catch (err) { alert("Moderation decision failed to sync."); }
+  };
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim()) {
+      setEmailError('Email is required');
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validateWhatsApp = (phone: string): boolean => {
+    // Jordanian WhatsApp format: 96279XXXXXXX (12 digits total)
+    const whatsappRegex = /^9627[789]\d{7}$/;
+    if (!phone.trim()) {
+      setWhatsappError('WhatsApp number is required');
+      return false;
+    }
+    if (!whatsappRegex.test(phone)) {
+      setWhatsappError('Enter valid Jordan number: 9627[7/8/9]XXXXXXX (12 digits)');
+      return false;
+    }
+    setWhatsappError('');
+    return true;
+  };
+
+  const handleSaveSettings = () => {
+    const isEmailValid = validateEmail(supportEmail);
+    const isWhatsAppValid = validateWhatsApp(supportWhatsApp);
+    
+    if (isEmailValid && isWhatsAppValid) {
+      localStorage.setItem('support_email', supportEmail);
+      localStorage.setItem('support_whatsapp', supportWhatsApp);
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 5000);
+    }
   };
 
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,6 +233,7 @@ const Dashboard: React.FC = () => {
             <NavItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={22}/>} label="Member Records" />
             <NavItem active={activeTab === 'posts'} onClick={() => setActiveTab('posts')} icon={<Package size={22}/>} label="Asset Moderation" />
             <NavItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Grid size={22}/>} label="Platform Taxonomy" />
+            <NavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={22}/>} label="System Settings" />
           </nav>
           
           <div className="mt-10 pt-10 border-t border-white/5">
@@ -298,7 +347,9 @@ const Dashboard: React.FC = () => {
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                       {activeTab === 'users' && userList.filter(u => u.fullName.toLowerCase().includes(filterQuery.toLowerCase())).map(user => (
+                       {activeTab === 'users' && userList
+                         .filter(u => !u.isDeleted && u.fullName.toLowerCase().includes(filterQuery.toLowerCase()))
+                         .map(user => (
                           <tr key={user.userID} className="hover:bg-indigo-50/20 transition-all duration-300">
                              <td className="px-14 py-9">
                                 <p className="font-black text-slate-900 text-2xl tracking-tight">{user.fullName}</p>
@@ -320,7 +371,9 @@ const Dashboard: React.FC = () => {
                           </tr>
                        ))}
 
-                       {activeTab === 'posts' && postList.filter(p => p.postTitle.toLowerCase().includes(filterQuery.toLowerCase())).map(post => (
+                       {activeTab === 'posts' && postList
+                         .filter(p => !p.isDeleted && p.postTitle.toLowerCase().includes(filterQuery.toLowerCase()))
+                         .map(post => (
                           <tr key={post.postID} className="hover:bg-indigo-50/20 transition-all duration-300">
                              <td className="px-14 py-9">
                                 <p className="font-black text-slate-900 text-2xl tracking-tight">{post.postTitle}</p>
@@ -358,6 +411,134 @@ const Dashboard: React.FC = () => {
                  </table>
               </div>
            </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="space-y-16 animate-in fade-in duration-700">
+            <div className="bg-white rounded-[4rem] p-16 shadow-[0_25px_80px_-15px_rgba(0,0,0,0.05)] border border-slate-100">
+              <div className="mb-12">
+                <h3 className="text-3xl font-black text-slate-900 mb-3">Support Contact Configuration</h3>
+                <p className="text-slate-500 font-semibold">Configure the support contact information displayed to users throughout the platform</p>
+              </div>
+
+              {settingsSaved && (
+                <div className="mb-8 bg-emerald-50 border-l-4 border-emerald-500 p-6 rounded-r-2xl flex items-center gap-3">
+                  <CheckCircle2 size={24} className="text-emerald-600" />
+                  <span className="font-bold text-emerald-700">Settings saved successfully! Changes are now live across the platform.</span>
+                </div>
+              )}
+
+              <div className="space-y-8">
+                {/* Support Email */}
+                <div>
+                  <label className="block text-sm font-black text-slate-700 uppercase tracking-widest mb-3">
+                    Support Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input
+                      type="email"
+                      value={supportEmail}
+                      onChange={(e) => {
+                        setSupportEmail(e.target.value);
+                        setSettingsSaved(false);
+                        setEmailError('');
+                      }}
+                      onBlur={() => validateEmail(supportEmail)}
+                      placeholder="support@tijarahjo.com"
+                      className={`w-full pl-16 pr-6 py-5 bg-slate-50 border-2 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all font-semibold text-slate-900 ${
+                        emailError ? 'border-red-500 focus:border-red-500' : 'border-slate-200 focus:border-indigo-500'
+                      }`}
+                    />
+                  </div>
+                  {emailError && (
+                    <p className="mt-2 text-sm text-red-600 flex items-center gap-2 ml-1">
+                      <AlertCircle size={14} />
+                      {emailError}
+                    </p>
+                  )}
+                  {!emailError && (
+                    <p className="mt-2 text-sm text-slate-500 ml-1">This email will be displayed on ban appeal pages and support links</p>
+                  )}
+                </div>
+
+                {/* WhatsApp Number */}
+                <div>
+                  <label className="block text-sm font-black text-slate-700 uppercase tracking-widest mb-3">
+                    WhatsApp Number
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input
+                      type="tel"
+                      value={supportWhatsApp}
+                      onChange={(e) => {
+                        // Only allow numbers
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        setSupportWhatsApp(value);
+                        setSettingsSaved(false);
+                        setWhatsappError('');
+                      }}
+                      onBlur={() => validateWhatsApp(supportWhatsApp)}
+                      placeholder="962791234567"
+                      maxLength={12}
+                      className={`w-full pl-16 pr-6 py-5 bg-slate-50 border-2 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all font-semibold text-slate-900 ${
+                        whatsappError ? 'border-red-500 focus:border-red-500' : 'border-slate-200 focus:border-indigo-500'
+                      }`}
+                    />
+                  </div>
+                  {whatsappError && (
+                    <p className="mt-2 text-sm text-red-600 flex items-center gap-2 ml-1">
+                      <AlertCircle size={14} />
+                      {whatsappError}
+                    </p>
+                  )}
+                  {!whatsappError && (
+                    <p className="mt-2 text-sm text-slate-500 ml-1">Format: 9627[7/8/9]XXXXXXX - Jordan mobile only (12 digits)</p>
+                  )}
+                </div>
+
+                {/* Save Button */}
+                <div className="pt-6">
+                  <button
+                    onClick={handleSaveSettings}
+                    disabled={!!emailError || !!whatsappError}
+                    className="flex items-center gap-3 px-10 py-5 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-600/30 hover:bg-indigo-700 active:scale-95 transition-all font-black text-sm uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Save size={20} />
+                    Save Support Settings
+                  </button>
+                </div>
+
+                {/* Preview */}
+                <div className="mt-12 pt-12 border-t-2 border-slate-100">
+                  <h4 className="text-xl font-black text-slate-900 mb-6">Preview</h4>
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-3xl p-8 border border-slate-200">
+                    <p className="text-sm font-bold text-slate-600 mb-4">Users will see these contact options:</p>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <a
+                        href={`mailto:${supportEmail}`}
+                        className="inline-flex items-center justify-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-bold text-sm"
+                      >
+                        <Mail size={18} />
+                        {supportEmail}
+                      </a>
+                      <a
+                        href={`https://wa.me/${supportWhatsApp}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-3 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-bold text-sm"
+                      >
+                        <Phone size={18} />
+                        WhatsApp
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </main>
 

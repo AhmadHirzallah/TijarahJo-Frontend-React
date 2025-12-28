@@ -108,7 +108,7 @@ const Browse: React.FC = () => {
             <Loader />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {posts.map(post => {
+              {posts.filter(post => !post.isDeleted).map(post => {
                 const postRawImage = post.primaryImageUrl || (post.images && post.images.length > 0 ? post.images[0].postImageURL : null);
                 const cardImage = getAbsoluteImageUrl(postRawImage);
                 return (

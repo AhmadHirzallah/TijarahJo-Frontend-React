@@ -160,7 +160,7 @@ const Home: React.FC = () => {
             </a>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
-            {latestPosts.map((post) => {
+            {latestPosts.filter(post => !post.isDeleted).map((post) => {
               const postRawImage = post.primaryImageUrl || (post.images && post.images.length > 0 ? post.images[0].postImageURL : null);
               const postImage = getAbsoluteImageUrl(postRawImage);
               return (

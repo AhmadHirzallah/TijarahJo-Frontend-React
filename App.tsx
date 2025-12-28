@@ -12,6 +12,7 @@ const Browse = lazy(() => import('./pages/Public/Browse'));
 const PostDetails = lazy(() => import('./pages/Public/PostDetails'));
 const Login = lazy(() => import('./pages/Auth/Login'));
 const Register = lazy(() => import('./pages/Auth/Register'));
+const AccountBanned = lazy(() => import('./pages/Auth/AccountBanned'));
 const CreatePost = lazy(() => import('./pages/User/CreatePost'));
 const EditPost = lazy(() => import('./pages/User/EditPost'));
 const Profile = lazy(() => import('./pages/User/Profile'));
@@ -51,6 +52,7 @@ const App: React.FC = () => {
             <Route path="/post/:id" element={<Layout><PostDetails /></Layout>} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/account-banned" element={<AccountBanned />} />
             
             <Route path="/create-post" element={<ProtectedRoute><Layout><CreatePost /></Layout></ProtectedRoute>} />
             <Route path="/edit-post/:id" element={<ProtectedRoute><Layout><EditPost /></Layout></ProtectedRoute>} />
