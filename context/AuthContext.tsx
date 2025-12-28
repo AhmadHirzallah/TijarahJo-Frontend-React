@@ -13,6 +13,7 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   refreshProfileImage: () => Promise<void>;
+  refreshUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,6 +69,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfileImage(null);
   };
 
+  const refreshUser = () => {
+    const storedUser = authService.getCurrentUser();
+    if (storedUser) {
+      setUser(storedUser);
+    }
+  };
+
   const isAdmin = user?.roleID === RoleID.Admin;
 
   return (
@@ -79,7 +87,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login, 
       logout, 
       loading,
-      refreshProfileImage
+      refreshProfileImage,
+      refreshUser
     }}>
       {children}
     </AuthContext.Provider>

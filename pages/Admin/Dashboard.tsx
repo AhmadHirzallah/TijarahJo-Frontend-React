@@ -1,10 +1,11 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { adminService } from '../../services/adminService';
 import { categoryService } from '../../services/categoryService';
 import { AdminDashboardStats, User, Post, RoleID, UserStatus, PostStatus, Category } from '../../types/api';
 import { useAuth } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../services/api';
+import api from '../../services/api';
 import Loader from '../../components/UI/Loader';
 import { 
   Users, Package, Grid, Shield, TrendingUp, Check, Search, Trash2, Ban, Eye, Settings, Plus, Edit2, 
@@ -16,10 +17,12 @@ import { Link } from 'react-router';
 type AdminTab = 'overview' | 'users' | 'posts' | 'categories';
 
 const Dashboard: React.FC = () => {
-  const { user: currentUser, profileImage } = useAuth();
+  const { user: currentUser, profileImage, refreshProfileImage } = useAuth();
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [userList, setUserList] = useState<User[]>([]);
   const [postList, setPostList] = useState<Post[]>([]);
@@ -85,6 +88,28 @@ const Dashboard: React.FC = () => {
     } catch (err) { alert("Moderation decision failed to sync."); }
   };
 
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!currentUser || !e.target.files?.[0]) return;
+    
+    const formData = new FormData();
+    formData.append('file', e.target.files[0]);
+    
+    try {
+      setUploading(true);
+      await api.post(`/users/${currentUser.userID}/images/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      await refreshProfileImage();
+      alert('Profile image updated successfully!');
+    } catch (err) {
+      console.error('Image upload failed:', err);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setUploading(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   if (loading) return <Loader fullScreen />;
   if (!stats) return <div className="p-20 text-center font-black text-slate-400">ADMIN_SESSION_LOST</div>;
 
@@ -114,6 +139,14 @@ const Dashboard: React.FC = () => {
           <div className="mb-14 relative group">
             <div className="absolute inset-0 bg-indigo-600/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div className="relative bg-white/5 rounded-[3rem] p-10 border border-white/10 flex flex-col items-center text-center shadow-2xl">
+               <input 
+                 type="file" 
+                 ref={fileInputRef}
+                 className="hidden" 
+                 accept="image/*"
+                 onChange={handleProfileImageUpload}
+                 disabled={uploading}
+               />
                <div className="w-40 h-40 rounded-[2.5rem] bg-gradient-to-br from-indigo-500 to-indigo-700 p-1.5 mb-6 shadow-2xl ring-4 ring-white/5 relative overflow-hidden">
                   <div className="w-full h-full rounded-[2.25rem] bg-slate-800 overflow-hidden flex items-center justify-center text-5xl font-black text-white">
                     {profileImage ? (
@@ -123,7 +156,18 @@ const Dashboard: React.FC = () => {
                     )}
                   </div>
                   <div className="absolute inset-0 bg-indigo-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button className="bg-white text-indigo-600 p-3 rounded-full shadow-xl"><Edit2 size={20}/></button>
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="bg-white text-indigo-600 p-3 rounded-full shadow-xl hover:scale-110 transition-transform disabled:opacity-50"
+                      title="Change profile picture"
+                    >
+                      {uploading ? (
+                        <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Edit2 size={20}/>
+                      )}
+                    </button>
                   </div>
                </div>
                <div className="space-y-2">
