@@ -159,6 +159,7 @@ const Register: React.FC = () => {
               </label>
               <input
                 type="text"
+                pattern="[A-Z][a-zA-Z]{2,}"
                 required
                 placeholder="e.g. Ahmad"
                 className={`w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl transition-all outline-none font-bold ${
@@ -183,6 +184,7 @@ const Register: React.FC = () => {
               </label>
               <input
                 type="text"
+                pattern="[A-Z][a-zA-Z]{2,}"
                 required
                 placeholder="e.g. Mansour"
                 className={`w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl transition-all outline-none font-bold ${
@@ -210,6 +212,9 @@ const Register: React.FC = () => {
             <input
               type="text"
               required
+              minlength="3" 
+              maxlength="20" 
+              pattern="[a-zA-Z0-9]+"
               placeholder="Unique handle"
               className={`w-full px-6 py-4 bg-slate-50 border-2 rounded-2xl transition-all outline-none font-bold ${
                 errors.username
@@ -265,6 +270,7 @@ const Register: React.FC = () => {
               <input
                 type="tel"
                 required
+                pattern="07[789][0-9]{7}"
                 placeholder="077, 078, or 079"
                 className={`w-full pl-14 pr-6 py-4 bg-slate-50 border-2 rounded-2xl transition-all outline-none font-bold ${
                   errors.phoneNumber

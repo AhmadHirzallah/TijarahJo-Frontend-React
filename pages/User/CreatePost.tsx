@@ -176,6 +176,7 @@ const CreatePost: React.FC = () => {
                 <input
                   required
                   type="text"
+                  pattern= "[a-zA-Z0-9]{3,100}"
                   placeholder="e.g. iPhone 15 Pro Max"
                   className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600"
                   onChange={e => setFormData({...formData, postTitle: e.target.value})}
@@ -186,8 +187,12 @@ const CreatePost: React.FC = () => {
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Price (JD)</label>
                   <input
                     required
+                    // can be float but precision of 2 decimal places
                     type="number"
+                    pattern = "^\d+(\.\d{1,2})?$"
+                    step="1"
                     min="0"
+                    max="1000000"
                     placeholder="0.00"
                     className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600"
                     onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})}
@@ -211,6 +216,7 @@ const CreatePost: React.FC = () => {
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Description</label>
                 <textarea
                   required
+                  pattern="[a-zA-Z0-9\s.,'-]{10,1000}"
                   rows={6}
                   placeholder="Details about the condition and features..."
                   className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600"

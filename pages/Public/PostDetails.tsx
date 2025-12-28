@@ -38,6 +38,10 @@ const PostDetails: React.FC = () => {
   };
 
   const formatPhone = (p?: string) => {
+    console.log(p);
+    console.log(post);
+    
+    
     if (!p) return "07X XXX XXXX";
     const c = p.replace(/\D/g, '');
     if (c.length === 12 && c.startsWith('962')) return `0${c.substring(3,5)} ${c.substring(5,8)} ${c.substring(8)}`;

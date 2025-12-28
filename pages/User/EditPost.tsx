@@ -78,12 +78,12 @@ const EditPost: React.FC = () => {
             <div className="space-y-6">
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Product Title</label>
-                <input required type="text" className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600" value={formData.postTitle} onChange={e => setFormData({...formData, postTitle: e.target.value})} />
+                <input required type="text" pattern= "[a-zA-Z0-9]{3,100}" className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600" value={formData.postTitle} onChange={e => setFormData({...formData, postTitle: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Price (JD)</label>
-                  <input required type="number" min="0" className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})} />
+                  <input required type="number" pattern = "^\d+(\.\d{1,2})?$" step="1" min="0" max="1000000" className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})} />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Category</label>
@@ -94,7 +94,7 @@ const EditPost: React.FC = () => {
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Description</label>
-                <textarea required rows={6} className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600" value={formData.postDescription} onChange={e => setFormData({...formData, postDescription: e.target.value})} />
+                <textarea required rows={6} pattern="[a-zA-Z0-9\s.,'-]{10,1000}" className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600" value={formData.postDescription} onChange={e => setFormData({...formData, postDescription: e.target.value})} />
               </div>
             </div>
             <div className="bg-gray-50 rounded-3xl p-6 flex flex-col justify-center text-center space-y-4"><ImageIcon className="mx-auto text-gray-300" size={64} /><p className="text-gray-500 font-medium">Manage photos on listing details page.</p></div>

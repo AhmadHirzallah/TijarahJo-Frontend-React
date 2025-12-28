@@ -407,14 +407,13 @@ const Profile: React.FC = () => {
 
                 <form onSubmit={handleUpdateProfile} className="grid grid-cols-2 gap-8 animate-in slide-in-from-top-4">
 
-                  <InputGroup label="First Name" value={profileForm.firstName} onChange={v => setProfileForm({...profileForm, firstName: v})} />
+                  <InputGroup inputType="text" label="First Name" pattern="[A-Z][a-zA-Z]{2,}" value={profileForm.firstName} onChange={v => setProfileForm({...profileForm, firstName: v})} />
 
-                  <InputGroup label="Last Name" value={profileForm.lastName} onChange={v => setProfileForm({...profileForm, lastName: v})} />
+                  <InputGroup inputType="text" label="Last Name" pattern="[A-Z][a-zA-Z]{2,}" value={profileForm.lastName} onChange={v => setProfileForm({...profileForm, lastName: v})} />
 
-                  <InputGroup label="Username" value={profileForm.username} onChange={v => setProfileForm({...profileForm, username: v})} />
+                  <InputGroup inputType="text" label="Username" minlength="3" maxlength="20" pattern="[a-zA-Z0-9]+" value={profileForm.username} onChange={v => setProfileForm({...profileForm, username: v})} />
 
-                  <InputGroup label="Email Address" value={profileForm.email} onChange={v => setProfileForm({...profileForm, email: v})} />
-
+                  <InputGroup inputType="email" label="Email Address" pattern="[a-zA-Z0-9._%+\-]+@(gmail|hotmail|outlook|yahoo)\.[a-z]{3}" value={profileForm.email} onChange={v => setProfileForm({...profileForm, email: v})} />
                   <div className="col-span-2 flex justify-end">
 
                     <button type="submit" className="bg-indigo-600 text-white px-12 py-5 rounded-2xl font-black shadow-2xl hover:bg-indigo-700 active:scale-95 transition-all">Save Changes</button>
@@ -465,8 +464,11 @@ const Profile: React.FC = () => {
 
                      type="tel"
 
+                     pattern="07[789][0-9]{7}"
+
                      placeholder="07XXXXXXXX"
 
+                     id="usreditphonenumber"
                      className="px-6 py-4 bg-slate-50 rounded-2xl font-black text-sm outline-none focus:ring-4 focus:ring-indigo-50 border border-slate-100"
 
                      value={newPhone}
@@ -475,7 +477,32 @@ const Profile: React.FC = () => {
 
                    />
 
-                   <button onClick={() => handlePhoneAction('add')} className="p-4 bg-indigo-600 text-white rounded-2xl shadow-xl hover:bg-indigo-700 active:scale-90 transition-all">
+                   <button onClick={() => {
+                    
+                    const inputField = document.getElementById("usreditphonenumber") as HTMLInputElement;
+
+                    inputField.setCustomValidity(''); // Reset custom validity message
+
+                    // This checks the pattern, required status, and type
+                    if (inputField.checkValidity()) {
+                        const normalizedInput = normalizePhone(newPhone);
+                        if (phones.some(p => p.phoneNumber === normalizedInput)) {
+                          inputField.setCustomValidity('The phone number already exists, enter a new');
+                          inputField.reportValidity(); 
+                          // alert("This phone number is already linked to your account.");
+                          return;
+                        }
+                        else {
+
+                          handlePhoneAction('add');
+                        }
+                    } else {
+                      inputField.setCustomValidity('Please enter a valid phone number in the format 07XXXXXXXX');
+                      // This triggers the standard browser error bubble
+                      inputField.reportValidity(); 
+                    }
+                    
+                   }} className="p-4 bg-indigo-600 text-white rounded-2xl shadow-xl hover:bg-indigo-700 active:scale-90 transition-all">
 
                      <Plus size={24}/>
 
@@ -844,7 +871,7 @@ const Profile: React.FC = () => {
 
   
 
-const InputGroup: React.FC<{ label: string, value: string, onChange: (v: string) => void }> = ({ label, value, onChange }) => (
+const InputGroup: React.FC<{ inputType: string, pattern?: string, label: string, value: string, onChange: (v: string) => void }> = ({ inputType, pattern, label, value, onChange }) => (
 
   <div className="space-y-2">
 
@@ -852,7 +879,9 @@ const InputGroup: React.FC<{ label: string, value: string, onChange: (v: string)
 
     <input
 
-      type="text"
+      type={inputType}
+
+      pattern={pattern}
 
       required
 
