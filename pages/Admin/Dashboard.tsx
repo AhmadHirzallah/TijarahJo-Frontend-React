@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { adminService } from '../../services/adminService';
 import { categoryService } from '../../services/categoryService';
+import { settingsService, SupportContactResponse } from '../../services/settingsService';
 import { AdminDashboardStats, User, Post, RoleID, UserStatus, PostStatus, Category } from '../../types/api';
 import { useAuth } from '../../context/AuthContext';
 import { BACKEND_URL } from '../../services/api';
@@ -9,7 +10,7 @@ import api from '../../services/api';
 import Loader from '../../components/UI/Loader';
 import { 
   Users, Package, Grid, Shield, TrendingUp, Check, Search, Trash2, Ban, Eye, Settings, Plus, Edit2, 
-  Activity, BarChart3, Database, ShieldAlert, X, AlertTriangle, CheckCircle2, ShieldCheck, ExternalLink, Save, Phone, Mail
+  Activity, BarChart3, Database, ShieldAlert, X, AlertTriangle, CheckCircle2, ShieldCheck, ExternalLink, Save, Phone, Mail, AlertCircle
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Link } from 'react-router';
@@ -32,12 +33,23 @@ const Dashboard: React.FC = () => {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryName, setCategoryName] = useState('');
   
-  // Support settings
-  const [supportEmail, setSupportEmail] = useState(localStorage.getItem('support_email') || 'support@tijarahjo.com');
-  const [supportWhatsApp, setSupportWhatsApp] = useState(localStorage.getItem('support_whatsapp') || '962791234567');
+  // Support settings (from API)
+  const [supportEmail, setSupportEmail] = useState('');
+  const [supportWhatsApp, setSupportWhatsApp] = useState('');
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [whatsappError, setWhatsappError] = useState('');
+
+  const loadSupportSettings = useCallback(async () => {
+    try {
+      const data = await settingsService.getSupportContact();
+      setSupportEmail(data.supportEmail || '');
+      setSupportWhatsApp(data.supportWhatsApp || '');
+    } catch (err) {
+      console.error('Failed to load support settings:', err);
+    }
+  }, []);
 
   const refreshData = useCallback(async () => {
     try {
@@ -53,11 +65,13 @@ const Dashboard: React.FC = () => {
       } else if (activeTab === 'categories') {
         const cats = await categoryService.getAll();
         setCategories(cats);
+      } else if (activeTab === 'settings') {
+        await loadSupportSettings();
       }
     } catch (err) {
       console.error("Dashboard out of sync", err);
     }
-  }, [activeTab]);
+  }, [activeTab, loadSupportSettings]);
 
   useEffect(() => {
     const init = async () => {
@@ -124,15 +138,52 @@ const Dashboard: React.FC = () => {
     return true;
   };
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
     const isEmailValid = validateEmail(supportEmail);
     const isWhatsAppValid = validateWhatsApp(supportWhatsApp);
     
     if (isEmailValid && isWhatsAppValid) {
-      localStorage.setItem('support_email', supportEmail);
-      localStorage.setItem('support_whatsapp', supportWhatsApp);
-      setSettingsSaved(true);
-      setTimeout(() => setSettingsSaved(false), 5000);
+      setSettingsSaving(true);
+      try {
+        await settingsService.updateSupportContact({
+          supportEmail,
+          supportWhatsApp
+        });
+        // Verify save by re-fetching - if this works, the save succeeded
+        await loadSupportSettings();
+        setSettingsSaved(true);
+        setTimeout(() => setSettingsSaved(false), 5000);
+      } catch (err: any) {
+        console.error('Failed to save settings:', err);
+        
+        // Even if there was an error, check if the data was actually saved
+        try {
+          const currentData = await settingsService.getSupportContact();
+          if (currentData.supportEmail === supportEmail && currentData.supportWhatsApp === supportWhatsApp) {
+            // Data was saved despite the error!
+            setSettingsSaved(true);
+            setTimeout(() => setSettingsSaved(false), 5000);
+            return;
+          }
+        } catch (verifyErr) {
+          // Couldn't verify, show original error
+        }
+        
+        // Handle validation errors from API
+        if (err.response?.data?.errors) {
+          const apiErrors = err.response.data.errors;
+          if (apiErrors.SupportEmail) setEmailError(apiErrors.SupportEmail[0]);
+          if (apiErrors.SupportWhatsApp) setWhatsappError(apiErrors.SupportWhatsApp[0]);
+        } else if (err.response?.status === 500) {
+          alert('Server error: The Settings API may not be configured correctly. Check backend logs.');
+        } else if (err.response?.status === 401 || err.response?.status === 403) {
+          alert('Authentication error: Please log in again with admin privileges.');
+        } else {
+          alert(`Failed to save settings: ${err.response?.data?.detail || err.message || 'Unknown error'}`);
+        }
+      } finally {
+        setSettingsSaving(false);
+      }
     }
   };
 
@@ -229,11 +280,11 @@ const Dashboard: React.FC = () => {
           </div>
 
           <nav className="space-y-3 flex-1">
-            <NavItem active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity size={22}/>} label="Market Intelligence" />
-            <NavItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={22}/>} label="Member Records" />
-            <NavItem active={activeTab === 'posts'} onClick={() => setActiveTab('posts')} icon={<Package size={22}/>} label="Asset Moderation" />
-            <NavItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Grid size={22}/>} label="Platform Taxonomy" />
-            <NavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={22}/>} label="System Settings" />
+            <NavItem active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity size={22}/>} label="Dashboard" />
+            <NavItem active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={22}/>} label="Users" />
+            <NavItem active={activeTab === 'posts'} onClick={() => setActiveTab('posts')} icon={<Package size={22}/>} label="Posts" />
+            <NavItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Grid size={22}/>} label="Categories" />
+            <NavItem active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={22}/>} label="Settings" />
           </nav>
           
           <div className="mt-10 pt-10 border-t border-white/5">
@@ -265,46 +316,29 @@ const Dashboard: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="space-y-16 animate-in fade-in duration-700">
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-10">
-               <StatCard label="Active Members" value={stats.totalUsers} color="blue" icon={<Users size={28}/>} />
-               <StatCard label="Market Assets" value={stats.activePosts} color="indigo" icon={<Package size={28}/>} />
-               <StatCard label="Pending Audit" value={stats.pendingReviewPosts} color="amber" icon={<ShieldAlert size={28}/>} pulse={stats.pendingReviewPosts > 0} />
-               <StatCard label="Safety Rating" value="99.9%" color="emerald" icon={<Shield size={28}/>} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-10">
+               <StatCard label="Total Users" value={stats.totalUsers} color="blue" icon={<Users size={28}/>} />
+               <StatCard label="Active Posts" value={stats.activePosts} color="indigo" icon={<Package size={28}/>} />
+               <StatCard label="Pending Review" value={stats.pendingReviewPosts} color="amber" icon={<ShieldAlert size={28}/>} pulse={stats.pendingReviewPosts > 0} />
             </div>
 
-            {/* Distribution and Health */}
-            <div className="grid grid-cols-1 2xl:grid-cols-3 gap-14">
-               <div className="2xl:col-span-2 bg-white rounded-[4rem] p-12 shadow-[0_25px_80px_-15px_rgba(0,0,0,0.05)] border border-slate-100">
-                  <div className="flex justify-between items-center mb-12">
-                     <h4 className="text-2xl font-black text-slate-900 flex items-center gap-3">Marketplace Inventory Stats</h4>
-                     <button className="text-xs font-black text-indigo-600 uppercase tracking-widest">Full Report</button>
-                  </div>
-                  <div className="h-96">
-                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={distributionData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                           <CartesianGrid strokeDasharray="6 6" vertical={false} stroke="#f1f5f9" />
-                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
-                           <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 700}} />
-                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 30px 60px -12px rgba(0,0,0,0.15)', padding: '20px'}} />
-                           <Bar dataKey="value" radius={[14, 14, 0, 0]} barSize={65}>
-                              {distributionData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                           </Bar>
-                        </BarChart>
-                     </ResponsiveContainer>
-                  </div>
+            {/* Distribution Chart */}
+            <div className="bg-white rounded-[4rem] p-12 shadow-[0_25px_80px_-15px_rgba(0,0,0,0.05)] border border-slate-100">
+               <div className="mb-12">
+                  <h4 className="text-2xl font-black text-slate-900 flex items-center gap-3">Marketplace Inventory Stats</h4>
                </div>
-
-               <div className="bg-slate-900 rounded-[4rem] p-14 text-white flex flex-col justify-center relative overflow-hidden shadow-2xl">
-                  <div className="flex items-center gap-4 mb-14">
-                     <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center"><Activity className="text-indigo-400" /></div>
-                     <h4 className="text-2xl font-black">Platform Health</h4>
-                  </div>
-                  <div className="space-y-12">
-                     <HealthBar label="Auth Gateway & Sessions" value={100} color="bg-indigo-500 shadow-indigo-500/40" />
-                     <HealthBar label="Media Content Storage" value={stats.activePosts} total={stats.totalPosts > 0 ? stats.totalPosts : 100} color="bg-emerald-500 shadow-emerald-500/40" />
-                     <HealthBar label="Database Logic Integrity" value={98} color="bg-amber-500 shadow-amber-500/40" />
-                  </div>
-                  <TrendingUp size={220} className="absolute -right-16 -bottom-16 opacity-[0.03] rotate-12" />
+               <div className="h-96">
+                  <ResponsiveContainer width="100%" height="100%">
+                     <BarChart data={distributionData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="6 6" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 700}} />
+                        <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 30px 60px -12px rgba(0,0,0,0.15)', padding: '20px'}} />
+                        <Bar dataKey="value" radius={[14, 14, 0, 0]} barSize={65}>
+                           {distributionData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                        </Bar>
+                     </BarChart>
+                  </ResponsiveContainer>
                </div>
             </div>
           </div>
@@ -377,7 +411,7 @@ const Dashboard: React.FC = () => {
                           <tr key={post.postID} className="hover:bg-indigo-50/20 transition-all duration-300">
                              <td className="px-14 py-9">
                                 <p className="font-black text-slate-900 text-2xl tracking-tight">{post.postTitle}</p>
-                                <p className="text-xs text-slate-400 uppercase font-black tracking-widest mt-1 opacity-70">{post.price.toLocaleString()} JD • ASSET_ID: {post.postID}</p>
+                                <p className="text-xs text-slate-400 uppercase font-black tracking-widest mt-1 opacity-70">{post.price.toLocaleString()} JD • POST_ID: {post.postID}</p>
                              </td>
                              <td className="px-14 py-9">
                                 <span className={`px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${post.status === PostStatus.Active ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
@@ -400,7 +434,7 @@ const Dashboard: React.FC = () => {
                        {activeTab === 'categories' && categories.filter(c => c.categoryName.toLowerCase().includes(filterQuery.toLowerCase())).map(cat => (
                           <tr key={cat.categoryID} className="hover:bg-indigo-50/20 transition-all duration-300">
                              <td className="px-14 py-9 font-black text-2xl text-slate-900 tracking-tight">{cat.categoryName}</td>
-                             <td className="px-14 py-9 text-[11px] text-slate-400 font-black tracking-[0.3em] uppercase opacity-70">Taxonomy Protocol Node #{cat.categoryID}</td>
+                             <td className="px-14 py-9 text-[11px] text-slate-400 font-black tracking-[0.3em] uppercase opacity-70">Category ID: #{cat.categoryID}</td>
                              <td className="px-14 py-9 text-right space-x-4">
                                 <button onClick={() => { setCategoryName(cat.categoryName); setEditingCategory(cat); setShowCategoryModal(true); }} className="p-4.5 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all shadow-sm"><Edit2 size={22}/></button>
                                 <button onClick={() => adminService.deleteCategory(cat.categoryID).then(refreshData)} className="p-4.5 text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-2xl transition-all shadow-sm"><Trash2 size={22}/></button>
@@ -503,11 +537,20 @@ const Dashboard: React.FC = () => {
                 <div className="pt-6">
                   <button
                     onClick={handleSaveSettings}
-                    disabled={!!emailError || !!whatsappError}
+                    disabled={!!emailError || !!whatsappError || settingsSaving}
                     className="flex items-center gap-3 px-10 py-5 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-600/30 hover:bg-indigo-700 active:scale-95 transition-all font-black text-sm uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Save size={20} />
-                    Save Support Settings
+                    {settingsSaving ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={20} />
+                        Save Support Settings
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -545,9 +588,9 @@ const Dashboard: React.FC = () => {
       {showCategoryModal && (
         <div className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-xl flex items-center justify-center p-8">
            <div className="bg-white w-full max-w-xl rounded-[4rem] p-16 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] animate-in zoom-in-95 duration-500">
-              <h3 className="text-4xl font-black mb-12 text-slate-900 tracking-tighter">Marketplace Taxonomy</h3>
+              <h3 className="text-4xl font-black mb-12 text-slate-900 tracking-tighter">Category Management</h3>
               <div className="space-y-4 mb-14">
-                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Protocol Item Label</label>
+                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">Category Name</label>
                 <input 
                   type="text" 
                   className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none focus:border-indigo-600 focus:bg-white font-black text-2xl transition-all shadow-inner" 

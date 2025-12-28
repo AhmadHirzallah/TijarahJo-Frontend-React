@@ -69,7 +69,9 @@ export interface PostDetails extends Post {
   ownerFirstName: string;
   ownerLastName: string;
   ownerFullName: string;
-  ownerPhone?: string;
+  ownerPrimaryPhone?: string | null;
+  hasOwnerPhone: boolean;
+  whatsAppLink?: string | null;
   roleID: RoleID;
   roleName: string;
   categoryName: string;

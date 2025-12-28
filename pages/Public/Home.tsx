@@ -160,7 +160,26 @@ const Home: React.FC = () => {
             </a>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
-            {latestPosts.filter(post => !post.isDeleted).map((post) => {
+            {latestPosts.filter(post => !post.isDeleted).length === 0 ? (
+              <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6">
+                  <Package size={48} className="text-slate-300" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">No Listings Yet</h3>
+                <p className="text-gray-500 max-w-md mb-6">
+                  Be the first to list an item on the marketplace!
+                </p>
+                {isAuthenticated && (
+                  <a 
+                    href="#/create-post" 
+                    className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
+                  >
+                    Create Your First Listing
+                  </a>
+                )}
+              </div>
+            ) : (
+              latestPosts.filter(post => !post.isDeleted).map((post) => {
               const postRawImage = post.primaryImageUrl || (post.images && post.images.length > 0 ? post.images[0].postImageURL : null);
               const postImage = getAbsoluteImageUrl(postRawImage);
               return (
@@ -197,7 +216,8 @@ const Home: React.FC = () => {
                   </div>
                 </a>
               );
-            })}
+            })
+            )}
           </div>
         </div>
       </section>

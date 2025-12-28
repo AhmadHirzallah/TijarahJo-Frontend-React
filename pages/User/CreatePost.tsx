@@ -176,7 +176,7 @@ const CreatePost: React.FC = () => {
                 <input
                   required
                   type="text"
-                  pattern= "[a-zA-Z0-9]{3,100}"
+                  pattern="[a-zA-Z0-9\s\-_,.()]{3,100}"
                   placeholder="e.g. iPhone 15 Pro Max"
                   className="mt-1 block w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-600"
                   onChange={e => setFormData({...formData, postTitle: e.target.value})}

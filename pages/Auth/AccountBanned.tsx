@@ -1,11 +1,42 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Ban, Mail, Phone, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router';
+import { settingsService, SupportContactResponse } from '../../services/settingsService';
 
 const AccountBanned: React.FC = () => {
-  // Get dynamic support contact info from localStorage (set by admin)
-  const supportEmail = localStorage.getItem('support_email') || 'support@tijarahjo.com';
-  const supportWhatsApp = localStorage.getItem('support_whatsapp') || '962791234567';
+  const [contact, setContact] = useState<SupportContactResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadSupportContact = async () => {
+      try {
+        const data = await settingsService.getSupportContact();
+        setContact(data);
+      } catch (error) {
+        console.error('Failed to load support contact:', error);
+        // Fallback values if API fails
+        setContact({
+          supportEmail: 'support@tijarahjo.com',
+          supportWhatsApp: '962791234567',
+          whatsAppLink: 'https://wa.me/962791234567',
+          emailLink: 'mailto:support@tijarahjo.com',
+          isConfigured: true,
+          whatsAppSupportLink: 'https://wa.me/962791234567?text=Hi%2C%20I%20need%20help%20with%20my%20banned%20account.'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSupportContact();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-red-100 py-12 px-4">
@@ -55,22 +86,26 @@ const AccountBanned: React.FC = () => {
         <div className="bg-white/50 backdrop-blur rounded-3xl p-8 mb-8 border border-white">
           <h3 className="font-black text-gray-900 mb-6 text-lg">Contact Support</h3>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              href={`mailto:${supportEmail}?subject=Account%20Ban%20Appeal`}
-              className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl font-bold"
-            >
-              <Mail className="h-5 w-5" />
-              Email Support
-            </a>
-            <a
-              href={`https://wa.me/${supportWhatsApp}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-green-600 text-white rounded-2xl hover:bg-green-700 transition-all shadow-lg hover:shadow-xl font-bold"
-            >
-              <Phone className="h-5 w-5" />
-              WhatsApp
-            </a>
+            {contact?.supportEmail && (
+              <a
+                href={contact.emailLink || `mailto:${contact.supportEmail}?subject=Account%20Ban%20Appeal`}
+                className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl font-bold"
+              >
+                <Mail className="h-5 w-5" />
+                Email Support
+              </a>
+            )}
+            {contact?.supportWhatsApp && (
+              <a
+                href={contact.whatsAppSupportLink || contact.whatsAppLink || `https://wa.me/${contact.supportWhatsApp}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-green-600 text-white rounded-2xl hover:bg-green-700 transition-all shadow-lg hover:shadow-xl font-bold"
+              >
+                <Phone className="h-5 w-5" />
+                WhatsApp
+              </a>
+            )}
           </div>
         </div>
 
