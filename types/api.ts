@@ -1,166 +1,272 @@
+/**
+ * API Types and Interfaces for TijarahJo Backend Integration
+ *
+ * This file defines the API structure for backend communication.
+ * All entities use string-based IDs for consistency.
+ */
 
-export enum UserStatus {
-  Active = 0,
-  Verified = 1,
-  Banned = 2
+import { Product } from "../types";
+
+// ============================================================================
+// Authentication & User Management
+// ============================================================================
+
+export interface LoginRequest {
+  usernameOrEmail: string; // Can be either username or email
+  password: string;
 }
 
-export enum PostStatus {
-  Draft = 0,
-  PendingReview = 1,
-  Active = 2,
-  Sold = 3,
-  Expired = 4,
-  Rejected = 5,
-  Removed = 6,
-  Deleted = 7
-}
-
-export enum RoleID {
-  Admin = 1,
-  User = 2,
-  Moderator = 3
-}
-
-export interface User {
-  userID: number;
+export interface SignUpRequest {
+  firstName: string;
+  lastName: string;
   username: string;
   email: string;
-  firstName: string;
-  lastName: string | null;
-  joinDate: string;
-  status: UserStatus;
-  roleID: RoleID;
-  isDeleted: boolean;
-  fullName: string;
-  primaryPhone?: string;
+  password: string;
+  phone: string; // Must start with +962
+  city: string;
+  area?: string;
 }
 
 export interface AuthResponse {
-  user: User;
-  token: string;
-  expiresAt: string;
-  role: string;
+  success: boolean;
+  token?: string;
+  user?: User;
+  message?: string;
 }
+
+export interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  phone: string; // +962 format
+  city: string;
+  area?: string;
+  bio?: string;
+  avatar?: string;
+  joinedDate: string; // ISO date string
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+}
+
+// ============================================================================
+// Product/Post Management
+// ============================================================================
+
+export interface CreatePostRequest {
+  title: string;
+  price: number; // Minimum 0.01 JOD
+  category: string;
+  city: string;
+  area?: string;
+  description: string;
+  images: string[]; // Array of image URLs or base64
+  phone: string; // +962 format
+}
+
+export interface UpdatePostRequest {
+  id: string;
+  title?: string;
+  price?: number; // Minimum 0.01 JOD
+  category?: string;
+  city?: string;
+  area?: string;
+  description?: string;
+  images?: string[];
+  phone?: string;
+}
+
+export interface PostResponse {
+  success: boolean;
+  post?: Product;
+  message?: string;
+}
+
+export interface PostsListResponse {
+  success: boolean;
+  posts: Product[];
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalPosts: number;
+    postsPerPage: number;
+  };
+  error?: {
+    message: string;
+    code?: string;
+  };
+}
+
+export interface UpdatePostStatusRequest {
+  id: string;
+  status: "ACTIVE" | "SOLD" | "DELETED";
+}
+
+// ============================================================================
+// Category Management
+// ============================================================================
 
 export interface Category {
-  categoryID: number;
-  categoryName: string;
+  id: string;
+  name: string;
+  nameAr: string; // Arabic translation
+  icon: string; // Icon identifier
+  color: string; // Hex color
+  image: string; // Category image URL
+  postCount: number;
+}
+
+export interface CategoriesResponse {
+  success: boolean;
+  categories: Category[];
+}
+
+// ============================================================================
+// Favorites Management
+// ============================================================================
+
+export interface AddFavoriteRequest {
+  userId: string;
+  postId: string;
+}
+
+export interface RemoveFavoriteRequest {
+  userId: string;
+  postId: string;
+}
+
+export interface FavoritesResponse {
+  success: boolean;
+  favorites: string[]; // Array of post IDs
+}
+
+// ============================================================================
+// Search & Filter
+// ============================================================================
+
+export interface SearchRequest {
+  query?: string;
+  category?: string;
+  city?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  status?: "ACTIVE" | "SOLD" | "DELETED";
+  sortBy?: "date" | "price" | "views";
+  sortOrder?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+}
+
+// ============================================================================
+// Seller Profile
+// ============================================================================
+
+export interface SellerProfile {
+  id: string;
+  name: string;
+  username: string;
+  phone: string;
+  city: string;
+  area?: string;
+  bio?: string;
+  avatar?: string;
+  joinedDate: string;
+  activeListingsCount: number;
+  totalSalesCount: number;
+}
+
+export interface SellerProfileResponse {
+  success: boolean;
+  seller: SellerProfile;
+  posts: Product[];
+}
+
+// ============================================================================
+// Analytics & Statistics
+// ============================================================================
+
+export interface PostAnalytics {
+  postId: string;
+  views: number;
+  favorites: number;
   createdAt: string;
-  isDeleted: boolean;
+  lastViewedAt?: string;
 }
 
-export interface Post {
-  postID: number;
-  userID: number;
-  categoryID: number;
-  postTitle: string;
-  postDescription: string;
-  price: number;
-  status: PostStatus;
-  createdAt: string;
-  isDeleted: boolean;
-}
-
-export interface PostDetails extends Post {
-  ownerUserID: number;
-  ownerUsername: string;
-  ownerEmail: string;
-  ownerFirstName: string;
-  ownerLastName: string;
-  ownerFullName: string;
-  ownerPrimaryPhone?: string | null;
-  hasOwnerPhone: boolean;
-  whatsAppLink?: string | null;
-  roleID: RoleID;
-  roleName: string;
-  categoryName: string;
-  reviews: Review[];
-  images: PostImage[];
-  reviewCount: number;
-  averageRating: number;
-  imageCount: number;
-  primaryImageUrl: string;
-}
-
-export interface PostImage {
-  postImageID: number;
-  postID: number;
-  postImageURL: string;
-  uploadedAt: string;
-  isDeleted?: boolean;
-}
-
-export interface UserImage {
-  userImageID: number;
-  userID: number;
-  imageURL: string;
-  uploadedAt: string;
-  isDeleted: boolean;
-}
-
-export interface Review {
-  reviewID: number;
-  postID: number;
-  userID: number;
-  rating: number;
-  reviewText: string;
-  createdAt: string;
-  isDeleted: boolean;
-  reviewerUsername?: string;
-  reviewerFullName?: string;
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  pageNumber: number;
-  rowsPerPage: number;
-  totalCount: number;
-  totalPages: number;
-  hasPreviousPage: boolean;
-  hasNextPage: boolean;
-}
-
-export interface AdminDashboardStats {
-  generatedAt: string;
-  totalUsers: number;
-  activeUsers: number;
-  deletedUsers: number;
+export interface UserAnalytics {
+  userId: string;
   totalPosts: number;
   activePosts: number;
-  deletedPosts: number;
-  draftPosts: number;
-  pendingReviewPosts: number;
-  publishedPosts: number;
-  totalCategories: number;
-  totalRoles: number;
+  soldPosts: number;
+  totalViews: number;
+  totalFavorites: number;
 }
 
-// User Post Response (for My Posts page)
-export interface UserPost {
-  postID: number;
-  userID: number;
-  categoryID: number;
-  categoryName: string | null;
-  postTitle: string;
-  postDescription: string | null;
-  price: number;
-  status: PostStatus;
-  statusName: string;
-  createdAt: string;
-  isDeleted: boolean;
-  primaryImageUrl: string | null;
-  images: PostImage[];
-  imageCount: number;
+// ============================================================================
+// API Endpoints Structure
+// ============================================================================
+
+/**
+ * Expected API Endpoints:
+ *
+ * AUTH:
+ * - POST   /api/auth/signup
+ * - POST   /api/auth/login
+ * - POST   /api/auth/logout
+ * - GET    /api/auth/me (get current user)
+ *
+ * POSTS:
+ * - GET    /api/posts (list all posts with filters)
+ * - GET    /api/posts/:id (get single post)
+ * - POST   /api/posts (create new post)
+ * - PUT    /api/posts/:id (update post)
+ * - PATCH  /api/posts/:id/status (update post status)
+ * - DELETE /api/posts/:id (delete post)
+ * - GET    /api/posts/user/:userId (get user's posts)
+ * - GET    /api/posts/category/:category (get posts by category)
+ *
+ * CATEGORIES:
+ * - GET    /api/categories (list all categories)
+ * - GET    /api/categories/:id (get single category)
+ *
+ * FAVORITES:
+ * - GET    /api/favorites (get user's favorites)
+ * - POST   /api/favorites (add to favorites)
+ * - DELETE /api/favorites/:postId (remove from favorites)
+ *
+ * USERS/SELLERS:
+ * - GET    /api/users/:id (get user profile)
+ * - PUT    /api/users/:id (update user profile)
+ * - GET    /api/sellers/:id (get seller profile with posts)
+ * - GET    /api/sellers/top (get top sellers)
+ *
+ * SEARCH:
+ * - GET    /api/search (search posts with filters)
+ *
+ * ANALYTICS:
+ * - GET    /api/analytics/post/:id (get post analytics)
+ * - GET    /api/analytics/user/:id (get user analytics)
+ * - POST   /api/analytics/view/:postId (track post view)
+ */
+
+// ============================================================================
+// Error Responses
+// ============================================================================
+
+export interface ApiError {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: any;
+  };
 }
 
-// Paginated Response for User Posts
-export interface UserPostsResponse {
-  items: UserPost[];
-  pageNumber: number;
-  rowsPerPage: number;
-  totalCount: number;
-  totalPages: number;
-  hasPreviousPage: boolean;
-  hasNextPage: boolean;
-}
+// ============================================================================
+// Common Response Wrapper
+// ============================================================================
+
+export type ApiResponse<T> =
+  | { success: true; data: T }
+  | ApiError;
