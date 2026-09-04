@@ -270,9 +270,6 @@ export function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
         // Check for errors - response might be successful HTTP but have Success: false in data
         if (!response.success || !response.data) {
           // Handle backend errors with better messages
-          console.log("[SignUp] Registration failed - no success or no data");
-          console.log("[SignUp] Response error:", (response as any).error);
-
           let errorMessage =
             response.message ||
             (response as any).error?.message ||
@@ -342,15 +339,6 @@ export function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
           );
           setIsLoading(false);
           return; // CRITICAL: Don't call onLogin without a token
-        }
-
-        // Verify the user was actually created by checking if we have user data
-        if (!user || (!user.id && !user.Id)) {
-          console.warn(
-            "[SignUp] Warning: User object missing or incomplete:",
-            user
-          );
-          // Still proceed if we have a token - user data might be fetched later
         }
 
         // Save token FIRST

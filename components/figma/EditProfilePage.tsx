@@ -54,9 +54,6 @@ export function EditProfilePage({
     });
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Debug: Log initial form data
-  console.log("[EditProfilePage] Initial profile:", profile);
-  console.log("[EditProfilePage] Initial formData:", formData);
   const [errors, setErrors] = useState<{
     firstName?: string;
     lastName?: string;
@@ -165,9 +162,6 @@ export function EditProfilePage({
   };
 
   const handleSave = () => {
-    console.log("[EditProfilePage] handleSave called");
-    console.log("[EditProfilePage] formData:", formData);
-
     // Validate form data
     const newErrors: typeof errors = {};
 
@@ -176,24 +170,13 @@ export function EditProfilePage({
       newErrors.firstName = language === "ar"
         ? "الاسم الأول مطلوب"
         : "First name is required";
-      console.log("[EditProfilePage] Validation error: First name is required");
     }
 
     if (!formData.lastName || !formData.lastName.trim()) {
       newErrors.lastName = language === "ar"
         ? "اسم العائلة مطلوب"
         : "Last name is required";
-      console.log("[EditProfilePage] Validation error: Last name is required");
     }
-
-    // City is optional - only validate if user tries to set it but it's invalid
-    // Note: City is not stored in database, so we don't require it
-    // if (!formData.city || formData.city.trim() === "") {
-    //   newErrors.city = language === "ar"
-    //     ? "المدينة مطلوبة"
-    //     : "City is required";
-    //   console.log("[EditProfilePage] Validation error: City is required, current value:", formData.city);
-    // }
 
     // Phone validation (optional but must be valid if provided)
     const phoneDigits = formData.phone.replace(/\D/g, '');
@@ -209,7 +192,6 @@ export function EditProfilePage({
 
     // If there are errors, show them and don't save
     if (Object.keys(newErrors).length > 0) {
-      console.log("[EditProfilePage] Validation errors:", newErrors);
       setErrors(newErrors);
       toast.error(
         language === "ar"
@@ -220,7 +202,6 @@ export function EditProfilePage({
     }
 
     // Clear errors and save
-    console.log("[EditProfilePage] Validation passed, calling onSave");
     setErrors({});
 
     // Call onSave - it will handle API call and navigation
@@ -231,7 +212,6 @@ export function EditProfilePage({
     if (savePromise instanceof Promise) {
       savePromise
         .then(() => {
-          console.log("[EditProfilePage] Save successful");
           setHasChanges(false);
         })
         .catch((error) => {

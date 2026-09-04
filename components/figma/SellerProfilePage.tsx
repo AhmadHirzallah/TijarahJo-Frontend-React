@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../ui/dialog";
 import { translations, Language } from "../../translations";
 import { Product } from "../../types";
+import { api } from "../../services/api";
 import { WhatsAppIcon } from "./WhatsAppIcon";
 import { useState, useEffect } from "react";
 import {
@@ -70,33 +71,21 @@ export function SellerProfilePage({
     const fetchSellerData = async () => {
       if (seller.id) {
         try {
-          const apiBaseUrl =
-            (import.meta as any).env?.VITE_API_BASE_URL ||
-            "http://localhost:5033/api";
-          const response = await fetch(`${apiBaseUrl}/users/${seller.id}`);
-          if (response.ok) {
-            const userData = await response.json();
-            const user = userData.data || userData;
-            if (user) {
-              const joinDate =
-                user.JoinedDate ||
-                user.joinedDate ||
-                user.JoinDate ||
-                user.joinDate;
-              const formattedDate = joinDate
-                ? new Date(joinDate).toLocaleDateString("en-US", {
-                    month: "short",
-                    year: "numeric",
-                  })
-                : seller.joinedDate;
-              setSellerData({
-                joinedDate: formattedDate,
-                avatar: user.Avatar || user.avatar,
-              });
-            }
+          const user = await api.users.getUser(seller.id);
+          if (user) {
+            const formattedDate = user.joinedDate
+              ? new Date(user.joinedDate).toLocaleDateString("en-US", {
+                  month: "short",
+                  year: "numeric",
+                })
+              : seller.joinedDate;
+            setSellerData({
+              joinedDate: formattedDate,
+              avatar: user.avatar,
+            });
           }
-        } catch (error) {
-          console.warn("[SellerProfilePage] Failed to fetch seller data:", error);
+        } catch {
+          // The page can render using the seller data it already received.
         }
       }
     };

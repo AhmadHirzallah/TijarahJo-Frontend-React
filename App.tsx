@@ -63,9 +63,6 @@ import { DEBOUNCE_DELAY } from "./constants";
 import { useAuth } from "./contexts/AuthContext";
 
 export default function App() {
-  // Debug: Log that App is rendering (disabled in production)
-  // console.log("App component is rendering...");
-
   // Get current user from AuthContext
   const { user, isAuthenticated, loading: authLoading, logout, checkAuth } = useAuth();
 
@@ -282,7 +279,6 @@ export default function App() {
     if (selectedProductId && !isLoadingProducts && availableProducts.length > 0) {
       const productExists = availableProducts.some((p) => p.id === selectedProductId);
       if (!productExists) {
-        console.log("[App] Persisted product ID not found in available products, clearing navigation state");
         setSelectedProductId(null);
         setProductDetailsOrigin(null);
         setProductDetailsOriginCategory(null);
@@ -459,8 +455,6 @@ export default function App() {
     return (
       <LoginPage
         onLogin={async (userData) => {
-          console.log("[App] onLogin called with userData:", userData);
-
           // Verify we have a token before proceeding
           const token = localStorage.getItem("tijarahjo_token");
           if (!token) {
@@ -470,7 +464,6 @@ export default function App() {
           }
 
           // Trigger AuthContext to check authentication immediately
-          console.log("[App] Triggering AuthContext to validate token...");
           await checkAuth();
 
           // Wait a bit for AuthContext to update state
@@ -486,8 +479,6 @@ export default function App() {
           // Check if user is actually authenticated now
           // Note: isAuthenticated might not have updated yet due to React state batching
           // So we'll proceed if token exists and hasn't been removed
-
-          console.log("[App] Authentication verified, closing login prompt and updating user profile");
 
           // Close login prompt
           setShowLoginPrompt(false);
@@ -568,13 +559,10 @@ export default function App() {
         }}
         onDeleteProduct={async (id) => {
           try {
-            console.log("[App] Deleting post:", id);
-
             // Delete from backend
             const result = await api.posts.deletePost(id);
 
             if (result.success) {
-              console.log("[App] Post deleted successfully");
               toast.success(
                 language === "ar"
                   ? "تم حذف المنشور بنجاح!"
@@ -602,8 +590,6 @@ export default function App() {
         }}
         onUpdateProduct={async (product) => {
           try {
-            console.log("[App] Updating post from profile:", product.id);
-
             // Update in backend
             const result = await api.posts.updatePost({
               id: product.id,
@@ -615,7 +601,6 @@ export default function App() {
             });
 
             if (result.success) {
-              console.log("[App] Post updated successfully from profile");
               toast.success(
                 language === "ar"
                   ? "تم تحديث المنشور بنجاح!"
@@ -834,8 +819,6 @@ export default function App() {
         onBack={() => setShowSellItem(false)}
         onSubmit={async (product) => {
           try {
-            console.log("[App] Creating new post:", product);
-
             // Call API to create post in backend
             const result = await api.posts.createPost({
               title: product.name,
@@ -849,7 +832,6 @@ export default function App() {
             });
 
             if (result.success) {
-              console.log("[App] Post created successfully:", result.post);
               toast.success(
                 language === "ar"
                   ? "تم إرسال المنشور للمراجعة بنجاح!"
@@ -1124,10 +1106,6 @@ export default function App() {
                   updatedProduct.status === "SOLD" ||
                   updatedProduct.status === "DELETED")
               ) {
-                console.log(
-                  "[App] Status changed, updating post status:",
-                  updatedProduct.status
-                );
                 const statusResult = await api.posts.updatePostStatus({
                   id: updatedProduct.id,
                   status: updatedProduct.status,
@@ -1159,7 +1137,6 @@ export default function App() {
                   JSON.stringify(updatedProduct.images || []);
 
               if (hasOtherChanges) {
-                console.log("[App] Updating post fields");
                 const result = await api.posts.updatePost({
                   id: updatedProduct.id,
                   title: updatedProduct.name,
@@ -1170,7 +1147,6 @@ export default function App() {
                 });
 
                 if (result.success) {
-                  console.log("[App] Post updated successfully");
                   toast.success(
                     language === "ar"
                       ? "تم تحديث المنشور بنجاح!"
@@ -1207,13 +1183,10 @@ export default function App() {
           }}
           onDeleteProduct={async (id) => {
             try {
-              console.log("[App] Deleting post from details:", id);
-
               // Delete from backend
               const result = await api.posts.deletePost(id);
 
               if (result.success) {
-                console.log("[App] Post deleted successfully");
                 toast.success(
                   language === "ar"
                     ? "تم حذف المنشور بنجاح!"
@@ -1301,8 +1274,6 @@ export default function App() {
       );
     }
   }
-
-  // console.log("App rendering main content...");
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#1a1a1a]">

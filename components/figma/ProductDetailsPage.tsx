@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Footer } from "./Footer";
@@ -23,6 +23,7 @@ import {
 } from "../ui/alert-dialog";
 import { Product, Language } from "../../types";
 import { translations } from "../../translations";
+import { api } from "../../services/api";
 import { EditProductDialog } from "./EditProductDialog";
 import { Logo } from "../ui/logo";
 import { shareProduct } from "../../utils/shareUtils";
@@ -70,20 +71,6 @@ export function ProductDetailsPage({
   onFavoriteToggle,
   isAuthenticated = false,
 }: ProductDetailsPageProps) {
-  // Debug: Log the product data
-  console.log("ProductDetailsPage - product:", product);
-  console.log("ProductDetailsPage - product.name:", product.name);
-  console.log("ProductDetailsPage - product.description:", product.description);
-  console.log(
-    "ProductDetailsPage - product.views:",
-    product.views,
-    "Type:",
-    typeof product.views
-  );
-  console.log("ProductDetailsPage - product.location:", product.location);
-  console.log("ProductDetailsPage - product.area:", product.area);
-  console.log("ProductDetailsPage - product.sellerId:", product.sellerId);
-
   const [selectedImage, setSelectedImage] = useState(0);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
@@ -95,6 +82,7 @@ export function ProductDetailsPage({
   const [sellerJoinDate, setSellerJoinDate] = useState<string | null>(null);
   const [sellerAvatar, setSellerAvatar] = useState<string | null>(null);
   const [sellerPhone, setSellerPhone] = useState<string | null>(null);
+  const trackedViewId = useRef<string | null>(null);
 
   const t = translations[language];
   const isRTL = language === "ar";
@@ -110,36 +98,9 @@ export function ProductDetailsPage({
 
   // Track view when product details page is viewed
   useEffect(() => {
-    if (product.id) {
-      // Increment view count (fire and forget - don't block UI)
-      const apiBaseUrl =
-        (import.meta as any).env?.VITE_API_BASE_URL ||
-        "http://localhost:5033/api";
-      fetch(`${apiBaseUrl}/posts/${product.id}/views`, {
-        method: "POST",
-      })
-        .then((response) => {
-          if (!response.ok) {
-            // Only log if it's not a 500 error (which indicates missing database setup)
-            if (response.status !== 500) {
-              console.warn(
-                `[ProductDetailsPage] Failed to track view: ${response.status} ${response.statusText}`
-              );
-            }
-            // Silently ignore 500 errors - they indicate missing database setup
-            // and will be fixed when migration scripts are run
-          }
-        })
-        .catch((error) => {
-          // Only log network errors, not HTTP errors (which are handled above)
-          if (error.name === "TypeError" && error.message.includes("fetch")) {
-            console.warn(
-              "[ProductDetailsPage] Network error tracking view:",
-              error
-            );
-          }
-          // Silently ignore other errors
-        });
+    if (product.id && trackedViewId.current !== product.id) {
+      trackedViewId.current = product.id;
+      void api.posts.trackView(product.id);
     }
   }, [product.id]);
 
@@ -148,63 +109,28 @@ export function ProductDetailsPage({
     const fetchSellerData = async () => {
       if (product.sellerId) {
         try {
-          const apiBaseUrl =
-            (import.meta as any).env?.VITE_API_BASE_URL ||
-            "http://localhost:5033/api";
-          const response = await fetch(
-            `${apiBaseUrl}/users/${product.sellerId}`
-          );
-          if (response.ok) {
-            const userData = await response.json();
-            console.log("[ProductDetailsPage] Seller data response:", userData);
-            // Handle both direct data and wrapped response
-            const user = userData.data || userData;
-            const joinDate =
-              user?.JoinedDate ||
-              user?.joinedDate ||
-              user?.JoinDate ||
-              user?.joinDate;
-            const avatar = user?.Avatar || user?.avatar;
-            const phone = user?.Phone || user?.phone;
+          const user = await api.users.getUser(product.sellerId);
+          if (user) {
+            const joinDate = user.joinedDate;
+            const avatar = user.avatar;
+            const phone = user.phone;
             if (joinDate) {
-              console.log("[ProductDetailsPage] Found join date:", joinDate);
               setSellerJoinDate(joinDate);
-            } else {
-              console.warn(
-                "[ProductDetailsPage] No join date found in seller data"
-              );
             }
             if (avatar) {
               setSellerAvatar(avatar);
             }
             if (phone) {
-              console.log("[ProductDetailsPage] Found phone:", phone);
               setSellerPhone(phone);
-            } else {
-              console.warn(
-                "[ProductDetailsPage] No phone found in seller data"
-              );
             }
-          } else {
-            console.warn(
-              "[ProductDetailsPage] Failed to fetch seller data, status:",
-              response.status
-            );
           }
-        } catch (error) {
-          console.warn(
-            "[ProductDetailsPage] Failed to fetch seller data:",
-            error
-          );
+        } catch {
+          // Seller metadata is optional; the listing remains usable without it.
         }
       }
     };
     fetchSellerData();
   }, [product.sellerId]);
-
-  // Debug: Log product images
-  console.log("ProductDetailsPage - product.images:", product.images);
-  console.log("ProductDetailsPage - product.image:", product.image);
 
   // Get product images with fallback
   const productImages =
@@ -214,13 +140,9 @@ export function ProductDetailsPage({
       ? [product.image]
       : [];
 
-  console.log("ProductDetailsPage - Filtered productImages:", productImages);
-
   // Ensure we always have at least one image (fallback placeholder)
   // Use empty string - ImageWithFallback will handle the placeholder
   const displayImages = productImages.length > 0 ? productImages : [""]; // Empty string triggers ImageWithFallback placeholder
-
-  console.log("ProductDetailsPage - Final displayImages:", displayImages);
 
   // Check if there are actually multiple unique images
   const hasMultipleImages = displayImages.length > 1;
@@ -1068,15 +990,12 @@ export function ProductDetailsPage({
                     // Only handle non-user-cancellation errors
                     if (error instanceof Error && error.name !== "AbortError") {
                       // Final fallback - manual copy prompt
-                      const userSelection = prompt(
+                      prompt(
                         language === "ar"
                           ? "انسخ هذا الرابط:"
                           : "Copy this link:",
                         shareUrl
                       );
-                      if (userSelection) {
-                        console.log("User manually copied link");
-                      }
                     }
                   }
                 }}

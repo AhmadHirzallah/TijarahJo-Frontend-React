@@ -38,7 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // If we have a valid token, clear guestMode (user is authenticated)
     if (token && guestMode === "true") {
-      console.log("[AuthContext] Found token, clearing guestMode");
       localStorage.removeItem("guestMode");
       setIsGuest(false);
     }
@@ -92,10 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user,
             token,
           });
-          console.log(
-            "[AuthContext] checkAuth successful, user authenticated:",
-            user.id
-          );
         } else {
           // apiRequest reports HTTP and network failures as values. Only an
           // authentication rejection proves the token is unusable; transient
@@ -115,20 +110,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
       } catch (error) {
-        // If backend is not available or token is invalid, clear auth state
-        console.warn("[AuthContext] checkAuth error:", error);
         const errorMessage =
           error instanceof Error ? error.message : String(error);
-        console.warn("[AuthContext] Error details:", errorMessage);
 
         // Only clear token if it's an authentication error (401), not a network error
         if (
           errorMessage.includes("401") ||
           errorMessage.includes("Unauthorized")
         ) {
-          console.warn(
-            "[AuthContext] Token is invalid (401), clearing auth state"
-          );
           localStorage.removeItem("tijarahjo_token");
           setAuthState({
             isAuthenticated: false,
@@ -137,9 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         } else {
           // Network error or other issue - keep token but mark as unauthenticated temporarily
-          console.warn(
-            "[AuthContext] Network/backend error, keeping token but marking as unauthenticated"
-          );
           setAuthState({
             isAuthenticated: false,
             user: null,
@@ -169,16 +155,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "tijarahjo_token") {
-        console.log(
-          "[AuthContext] Token changed in localStorage, refreshing auth state"
-        );
         checkAuth();
       }
     };
 
     // Also listen for custom authTokenSet event (for same-tab token updates)
     const handleAuthTokenSet = () => {
-      console.log("[AuthContext] authTokenSet event received, checking auth");
       checkAuth();
     };
 
@@ -193,18 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      console.log("[AuthContext] Attempting login with:", email);
       const response = await api.auth.login({
         usernameOrEmail: email,
         password: password,
-      });
-
-      console.log("[AuthContext] Login response:", {
-        success: response.success,
-        hasToken: !!response.token,
-        hasUser: !!response.user,
-        message: (response as any).message,
-        user: response.user,
       });
 
       // Check if login failed
@@ -243,9 +216,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           };
         } else {
           // Create minimal user from email if user object is missing
-          console.warn(
-            "[AuthContext] No user object in response, creating minimal user from email"
-          );
           const emailParts = email.split("@");
           user = {
             id: "",
@@ -265,7 +235,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Fetch full user data from backend if user object is incomplete
         if (!user.firstName && !user.lastName && !user.name) {
           try {
-            console.log("[AuthContext] User object incomplete, fetching full user data...");
             const userResponse = await api.auth.getCurrentUser();
             if (userResponse.success && userResponse.data) {
               const backendUser = userResponse.data as any;
@@ -291,10 +260,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   user.joinedDate,
                 role: (backendUser.Role || user.role || "user") as "user" | "admin",
               };
-              console.log("[AuthContext] Fetched full user data:", user);
             }
-          } catch (error) {
-            console.warn("[AuthContext] Failed to fetch full user data after login:", error);
+          } catch {
             // Continue with the user object from login response
           }
         }
@@ -304,7 +271,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user,
           token: response.token,
         });
-        console.log("[AuthContext] Login successful, user set:", user);
         return true;
       }
 

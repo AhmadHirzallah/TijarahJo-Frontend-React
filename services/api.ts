@@ -250,7 +250,6 @@ export const authApi = {
             user: transformedUser,
           } as any;
         } else {
-          console.warn("No User object in backend response, but Success is true and Token exists");
           // Return success with token, user data will be fetched separately
           return {
             success: true,
@@ -282,19 +281,10 @@ export const authApi = {
         const details = response.error.details as any;
         if (details.Message) {
           errorMessage = details.Message;
-          console.log(
-            "Found error message in response.error.details.Message:",
-            errorMessage
-          );
         } else if (details.message) {
           errorMessage = details.message;
-          console.log(
-            "Found error message in response.error.details.message:",
-            errorMessage
-          );
         } else if (details.Success === false && details.Message) {
           errorMessage = details.Message;
-          console.log("Found error in AuthResponse:", errorMessage);
         }
       }
 
@@ -305,7 +295,6 @@ export const authApi = {
         response.error.message
       ) {
         errorMessage = response.error.message;
-        console.log("Using response.error.message:", errorMessage);
       }
 
       // Connection errors
@@ -434,19 +423,10 @@ export const authApi = {
         const details = response.error.details as any;
         if (details.Message) {
           errorMessage = details.Message;
-          console.log(
-            "Found error message in response.error.details.Message:",
-            errorMessage
-          );
         } else if (details.message) {
           errorMessage = details.message;
-          console.log(
-            "Found error message in response.error.details.message:",
-            errorMessage
-          );
         } else if (details.Success === false && details.Message) {
           errorMessage = details.Message;
-          console.log("Found error in AuthResponse:", errorMessage);
         }
       }
 
@@ -457,7 +437,6 @@ export const authApi = {
         response.error.message
       ) {
         const errorStr = response.error.message;
-        console.log("Using response.error.message:", errorStr);
 
         // Check for unique constraint violations in the error message
         if (
@@ -549,10 +528,8 @@ export const authApi = {
   logout: async (): Promise<void> => {
     try {
       await apiRequest("/auth/logout", { method: "POST" });
-    } catch (error) {
-      // Logout endpoint might return 404 if not implemented, that's okay
-      // We'll still clear the token client-side
-      console.log("[API] Logout endpoint call failed (this is okay):", error);
+    } catch {
+      // Client-side logout must still complete if the API is unavailable.
     }
     localStorage.removeItem("tijarahjo_token");
     localStorage.removeItem("tijarahjo_auth");
