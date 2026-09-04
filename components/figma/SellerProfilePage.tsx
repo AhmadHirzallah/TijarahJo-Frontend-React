@@ -10,6 +10,11 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../ui/dia
 import { translations, Language } from "../../translations";
 import { Product } from "../../types";
 import { api } from "../../services/api";
+import {
+  getContactPhone,
+  toTelephoneHref,
+  toWhatsAppNumber,
+} from "../../utils/phoneUtils";
 import { WhatsAppIcon } from "./WhatsAppIcon";
 import { useState, useEffect } from "react";
 import {
@@ -48,6 +53,15 @@ interface SellerProfilePageProps {
   isAuthenticated: boolean;
 }
 
+interface SellerData {
+  joinedDate?: string;
+  avatar?: string;
+  phone?: string;
+  city?: string;
+  area?: string;
+  bio?: string;
+}
+
 export function SellerProfilePage({
   seller,
   products,
@@ -64,15 +78,18 @@ export function SellerProfilePage({
   const [activeTab, setActiveTab] = useState("products");
   const [showPhoneDialog, setShowPhoneDialog] = useState(false);
   const [phoneRevealed, setPhoneRevealed] = useState(false);
-  const [sellerData, setSellerData] = useState<{ joinedDate: string; avatar?: string } | null>(null);
+  const [sellerData, setSellerData] = useState<SellerData | null>(null);
 
   // Fetch actual seller data from API
   useEffect(() => {
+    let cancelled = false;
+    setSellerData(null);
+
     const fetchSellerData = async () => {
       if (seller.id) {
         try {
           const user = await api.users.getUser(seller.id);
-          if (user) {
+          if (user && !cancelled) {
             const formattedDate = user.joinedDate
               ? new Date(user.joinedDate).toLocaleDateString("en-US", {
                   month: "short",
@@ -82,6 +99,10 @@ export function SellerProfilePage({
             setSellerData({
               joinedDate: formattedDate,
               avatar: user.avatar,
+              phone: user.phone,
+              city: user.city,
+              area: user.area,
+              bio: user.bio,
             });
           }
         } catch {
@@ -89,13 +110,31 @@ export function SellerProfilePage({
         }
       }
     };
-    fetchSellerData();
+    void fetchSellerData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [seller.id, seller.joinedDate]);
 
   // Get seller's products
-  const sellerProducts = products.filter(p => p.seller === seller.name);
+  const sellerProducts = products.filter((product) =>
+    seller.id ? product.sellerId === seller.id : product.seller === seller.name
+  );
   // Only show ACTIVE products to buyers (not SOLD or DELETED)
   const activeProducts = sellerProducts.filter(p => p.status === "ACTIVE");
+  const contactPhone = getContactPhone(sellerData?.phone, seller.phone);
+  const whatsappPhone = toWhatsAppNumber(contactPhone);
+  const sellerLocation = sellerData?.city || seller.location;
+  const sellerArea = sellerData?.area || seller.area;
+  const joinedDate = sellerData?.joinedDate || seller.joinedDate;
+  const sellerBio = sellerData?.bio || seller.bio;
+
+  const openWhatsApp = () => {
+    if (whatsappPhone) {
+      window.open(`https://wa.me/${whatsappPhone}`, "_blank", "noopener,noreferrer");
+    }
+  };
 
   // Format phone number with masking
   const formatPhone = (phone: string, revealed: boolean) => {
@@ -164,7 +203,8 @@ export function SellerProfilePage({
                 <Button
                   className="flex-1 hover:opacity-90"
                   style={{ backgroundColor: "#25D366", color: "white" }}
-                  onClick={() => window.open(`https://wa.me/${seller.phone}`, '_blank')}
+                  disabled={!whatsappPhone}
+                  onClick={openWhatsApp}
                 >
                   <WhatsAppIcon className="w-5 h-5" />
                   <span className="sr-only">{t.sendMessage || "Message"}</span>
@@ -173,6 +213,7 @@ export function SellerProfilePage({
                   variant="outline"
                   className="flex-1"
                   style={{ borderColor: "#0A4ABF", color: "#0A4ABF" }}
+                  disabled={!contactPhone}
                   onClick={() => setShowPhoneDialog(true)}
                 >
                   <Phone className="w-5 h-5" />
@@ -189,18 +230,22 @@ export function SellerProfilePage({
                     <h1 style={{ color: "#000000" }}>{seller.name}</h1>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>{seller.location}{seller.area ? `, ${seller.area}` : ''}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>{t.joined || "Joined"} {sellerData?.joinedDate || seller.joinedDate}</span>
-                    </div>
+                    {sellerLocation && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        <span>{sellerLocation}{sellerArea ? `, ${sellerArea}` : ''}</span>
+                      </div>
+                    )}
+                    {joinedDate && (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-4 h-4" />
+                        <span>{t.joined || "Joined"} {joinedDate}</span>
+                      </div>
+                    )}
                   </div>
-                  {seller.bio && (
+                  {sellerBio && (
                     <p className="text-gray-600 max-w-2xl mb-4">
-                      {seller.bio}
+                      {sellerBio}
                     </p>
                   )}
                 </div>
@@ -210,7 +255,8 @@ export function SellerProfilePage({
                   <Button
                     className="hover:opacity-90"
                     style={{ backgroundColor: "#25D366", color: "white" }}
-                    onClick={() => window.open(`https://wa.me/${seller.phone}`, '_blank')}
+                    disabled={!whatsappPhone}
+                    onClick={openWhatsApp}
                   >
                     <WhatsAppIcon className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
                     {t.sendMessage || "Message"}
@@ -218,6 +264,7 @@ export function SellerProfilePage({
                   <Button
                     variant="outline"
                     style={{ borderColor: "#0A4ABF", color: "#0A4ABF" }}
+                    disabled={!contactPhone}
                     onClick={() => setShowPhoneDialog(true)}
                   >
                     <Phone className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
@@ -319,7 +366,13 @@ export function SellerProfilePage({
       </div>
 
       {/* Phone Dialog */}
-      <Dialog open={showPhoneDialog} onOpenChange={setShowPhoneDialog}>
+      <Dialog
+        open={showPhoneDialog}
+        onOpenChange={(open) => {
+          setShowPhoneDialog(open);
+          if (!open) setPhoneRevealed(false);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogTitle className="sr-only">
             {language === "ar" ? "اتصل بالبائع" : "Call Seller"}
@@ -338,13 +391,17 @@ export function SellerProfilePage({
                 {language === "ar" ? "رقم الهاتف" : "Phone Number"}
               </h3>
               <p className="text-sm text-gray-500">
-                {language === "ar"
+                {!contactPhone
+                  ? language === "ar"
+                    ? "لم يضف البائع رقم هاتف صالحاً"
+                    : "The seller has not provided a valid phone number"
+                  : language === "ar"
                   ? phoneRevealed
                     ? "انقر على الرقم للاتصال بالبائع"
                     : "انقر على الزر لعرض رقم الهاتف"
                   : phoneRevealed
-                    ? "Click the number to call the seller"
-                    : "Click the button to reveal the phone number"}
+                  ? "Click the number to call the seller"
+                  : "Click the button to reveal the phone number"}
               </p>
             </div>
 
@@ -358,13 +415,17 @@ export function SellerProfilePage({
                 }}
               >
                 <div className="text-2xl font-bold tracking-wider" style={{ color: "#0A4ABF" }}>
-                  {formatPhone(seller.phone, phoneRevealed)}
+                  {contactPhone
+                    ? formatPhone(contactPhone, phoneRevealed)
+                    : language === "ar"
+                    ? "غير متاح"
+                    : "Not available"}
                 </div>
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full pt-2">
-              {!phoneRevealed ? (
+              {contactPhone && !phoneRevealed ? (
                 <Button
                   className="flex-1"
                   style={{
@@ -376,9 +437,9 @@ export function SellerProfilePage({
                   <Phone className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                   {language === "ar" ? "عرض رقم الهاتف" : "Show Phone Number"}
                 </Button>
-              ) : (
+              ) : contactPhone ? (
                 <a
-                  href={`tel:${seller.phone}`}
+                  href={toTelephoneHref(contactPhone)}
                   className="flex-1"
                 >
                   <Button
@@ -392,7 +453,7 @@ export function SellerProfilePage({
                     {language === "ar" ? "اتصل الآن" : "Call Now"}
                   </Button>
                 </a>
-              )}
+              ) : null}
               <Button
                 variant="outline"
                 className="flex-1"

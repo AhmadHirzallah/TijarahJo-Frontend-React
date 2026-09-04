@@ -9,6 +9,7 @@ import {
 } from "react";
 import { User, AuthState } from "../types";
 import { api } from "../services/api";
+import { normalizeUserRole } from "../utils/roleUtils";
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<boolean>;
@@ -83,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             avatar: backendUser.Avatar || backendUser.avatar || undefined,
             joinedDate:
               backendUser.JoinedDate || backendUser.joinedDate || undefined,
-            role: (backendUser.Role || "user") as "user" | "admin",
+            role: normalizeUserRole(backendUser.Role || backendUser.role),
           };
 
           setAuthState({
@@ -212,7 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             bio: response.user.bio || "",
             avatar: response.user.avatar,
             joinedDate: response.user.joinedDate,
-            role: (response.user as any).role || "user",
+            role: normalizeUserRole(response.user.role),
           };
         } else {
           // Create minimal user from email if user object is missing
@@ -258,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   backendUser.JoinedDate ||
                   backendUser.joinedDate ||
                   user.joinedDate,
-                role: (backendUser.Role || user.role || "user") as "user" | "admin",
+                role: normalizeUserRole(backendUser.Role || user.role),
               };
             }
           } catch {
@@ -337,7 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             city: user.city || user.City || "",
             area: user.area || user.Area || "",
             bio: user.bio || user.Bio || "",
-            role: (user.role || user.Role || "user") as "user" | "admin",
+            role: normalizeUserRole(user.role || user.Role),
             avatar: user.avatar || user.Avatar || undefined,
             joinedDate: user.joinedDate || user.JoinedDate || undefined,
           };

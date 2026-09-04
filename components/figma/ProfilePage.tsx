@@ -314,7 +314,7 @@ export function ProfilePage({
                           area: userProfile.area || "",
                           bio: userProfile.bio || "",
                           avatar: userProfile.avatar || "",
-                          joinedDate: userProfile.joinedDate || new Date().toISOString(),
+                          joinedDate: userProfile.joinedDate || "",
                         }}
                       />
                     </DialogContent>

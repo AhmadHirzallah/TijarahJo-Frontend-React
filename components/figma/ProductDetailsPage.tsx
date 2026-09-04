@@ -27,6 +27,11 @@ import { api } from "../../services/api";
 import { EditProductDialog } from "./EditProductDialog";
 import { Logo } from "../ui/logo";
 import { shareProduct } from "../../utils/shareUtils";
+import {
+  getContactPhone,
+  toTelephoneHref,
+  toWhatsAppNumber,
+} from "../../utils/phoneUtils";
 import { ImageWithFallback } from "./ImageWithFallback";
 import {
   Eye,
@@ -89,6 +94,7 @@ export function ProductDetailsPage({
 
   // Scroll to top when product details page loads or product changes
   useEffect(() => {
+    setSelectedImage(0);
     // Scroll to top immediately and forcefully when product changes
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     // Backup: Also try scrolling the document element
@@ -106,11 +112,16 @@ export function ProductDetailsPage({
 
   // Fetch seller data to get join date, avatar, and phone
   useEffect(() => {
+    let cancelled = false;
+    setSellerJoinDate(null);
+    setSellerAvatar(null);
+    setSellerPhone(null);
+
     const fetchSellerData = async () => {
       if (product.sellerId) {
         try {
           const user = await api.users.getUser(product.sellerId);
-          if (user) {
+          if (user && !cancelled) {
             const joinDate = user.joinedDate;
             const avatar = user.avatar;
             const phone = user.phone;
@@ -129,7 +140,11 @@ export function ProductDetailsPage({
         }
       }
     };
-    fetchSellerData();
+    void fetchSellerData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [product.sellerId]);
 
   // Get product images with fallback
@@ -161,25 +176,33 @@ export function ProductDetailsPage({
     }
   };
 
+  const contactPhone = getContactPhone(sellerPhone, product.phone);
+  const whatsappPhone = toWhatsAppNumber(contactPhone);
+
   const handleWhatsAppMessage = () => {
-    const phoneNumber = sellerPhone || product.phone || "962700000000"; // Default Jordanian number format
-    // Remove + and spaces for WhatsApp URL
-    const cleanPhone = phoneNumber.replace(/[\s\+]/g, "");
+    if (!whatsappPhone) return;
+
     const message =
       language === "ar"
         ? `مرحباً، أنا مهتم بـ ${product.name} المعروض بسعر ${product.price} دينار أردني`
         : `Hi, I'm interested in ${product.name} listed for ${product.price} JOD`;
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+    const whatsappUrl = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
       message
     )}`;
-    window.open(whatsappUrl, "_blank");
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   };
 
   const isFavorited = favoriteIds.includes(product.id);
 
   // Calculate seller's active listings
   const activeListingsCount = allProducts
-    ? allProducts.filter((p) => p.seller === product.seller).length
+    ? allProducts.filter(
+        (candidate) =>
+          candidate.status === "ACTIVE" &&
+          (product.sellerId
+            ? candidate.sellerId === product.sellerId
+            : candidate.seller === product.seller)
+      ).length
     : 0;
 
   return (
@@ -629,8 +652,13 @@ export function ProductDetailsPage({
                     </span>
                     <span className="font-semibold text-gray-900 dark:text-white">
                       {(() => {
-                        if (!sellerJoinDate) return "Jan 2024";
+                        if (!sellerJoinDate) {
+                          return language === "ar" ? "غير متاح" : "Not available";
+                        }
                         const joinDate = new Date(sellerJoinDate);
+                        if (Number.isNaN(joinDate.getTime())) {
+                          return language === "ar" ? "غير متاح" : "Not available";
+                        }
                         const now = new Date();
                         // If date is in the future, use current date instead
                         const dateToUse = joinDate > now ? now : joinDate;
@@ -716,12 +744,17 @@ export function ProductDetailsPage({
                               color: "white",
                             }}
                             type="button"
+                            disabled={!contactPhone}
                             onClick={() => setShowPhoneDialog(true)}
                           >
                             <Phone
                               className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`}
                             />
-                            {t.callSeller || "Call Seller"}
+                            {contactPhone
+                              ? t.callSeller || "Call Seller"
+                              : language === "ar"
+                              ? "رقم الهاتف غير متاح"
+                              : "Phone unavailable"}
                           </Button>
                           <Button
                             variant="outline"
@@ -731,6 +764,7 @@ export function ProductDetailsPage({
                               borderColor: "#25D366",
                               color: "white",
                             }}
+                            disabled={!whatsappPhone}
                             onClick={handleWhatsAppMessage}
                           >
                             <svg
@@ -1096,34 +1130,39 @@ export function ProductDetailsPage({
                 {language === "ar" ? "رقم الهاتف" : "Phone Number"}
               </h3>
               <p className="text-sm text-gray-500">
-                {language === "ar"
-                  ? "انقر على الرقم للاتصال بالبائع"
-                  : "Click the number to call the seller"}
+                {contactPhone
+                  ? language === "ar"
+                    ? "انقر على الرقم للاتصال بالبائع"
+                    : "Click the number to call the seller"
+                  : language === "ar"
+                  ? "لم يضف البائع رقم هاتف صالحاً"
+                  : "The seller has not provided a valid phone number"}
               </p>
             </div>
-            <a
-              href={`tel:${sellerPhone || product.phone || "962700000000"}`}
-              className="text-3xl font-semibold tracking-wide hover:opacity-80 transition-opacity"
-              style={{ color: "#0A4ABF" }}
-            >
-              {sellerPhone || product.phone || "+962 7 0000 0000"}
-            </a>
-            <div className="flex flex-col sm:flex-row gap-3 w-full pt-4">
+            {contactPhone && (
               <a
-                href={`tel:${sellerPhone || product.phone || "962700000000"}`}
-                className="flex-1"
+                href={toTelephoneHref(contactPhone)}
+                className="text-3xl font-semibold tracking-wide hover:opacity-80 transition-opacity"
+                style={{ color: "#0A4ABF" }}
               >
-                <Button
-                  className="w-full"
-                  style={{
-                    backgroundColor: "#0A4ABF",
-                    color: "white",
-                  }}
-                >
-                  <Phone className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-                  {language === "ar" ? "اتصل الآن" : "Call Now"}
-                </Button>
+                {contactPhone}
               </a>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3 w-full pt-4">
+              {contactPhone && (
+                <a href={toTelephoneHref(contactPhone)} className="flex-1">
+                  <Button
+                    className="w-full"
+                    style={{
+                      backgroundColor: "#0A4ABF",
+                      color: "white",
+                    }}
+                  >
+                    <Phone className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                    {language === "ar" ? "اتصل الآن" : "Call Now"}
+                  </Button>
+                </a>
+              )}
               <Button
                 variant="outline"
                 className="flex-1"

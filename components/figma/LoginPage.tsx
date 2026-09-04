@@ -375,10 +375,7 @@ export function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
           token: token,
           phone: processedPhone,
           avatar: user?.avatar || user?.Avatar,
-          joinedDate: new Date().toLocaleDateString("en-US", {
-            month: "short",
-            year: "numeric",
-          }),
+          joinedDate: user?.joinedDate || user?.JoinedDate || "",
         });
 
         setIsLoading(false);
@@ -466,10 +463,7 @@ export function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
           token: token,
           phone: user?.phone || user?.Phone || "",
           avatar: user?.avatar || user?.Avatar,
-          joinedDate: new Date().toLocaleDateString("en-US", {
-            month: "short",
-            year: "numeric",
-          }),
+          joinedDate: user?.joinedDate || user?.JoinedDate || "",
         });
 
         setIsLoading(false);

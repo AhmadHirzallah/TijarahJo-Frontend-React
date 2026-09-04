@@ -49,6 +49,8 @@ export interface UserProfile {
   joinedDate: string;
 }
 
+export type UserRole = "user" | "admin" | "moderator";
+
 export interface User {
   id: string;
   email: string;
@@ -62,7 +64,7 @@ export interface User {
   bio?: string;
   avatar?: string;
   joinedDate?: string;
-  role: "user" | "admin";
+  role: UserRole;
 }
 
 export interface AuthState {

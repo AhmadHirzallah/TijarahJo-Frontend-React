@@ -189,9 +189,13 @@ export default function App() {
     area: "",
     location: "",
     bio: "",
-    avatar:
-      "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop",
-    joinedDate: "Jan 2024",
+    avatar: user?.avatar || "",
+    joinedDate: user?.joinedDate
+      ? new Date(user.joinedDate).toLocaleDateString("en-US", {
+          month: "short",
+          year: "numeric",
+        })
+      : "",
   });
 
   const t = translations[language];
@@ -351,7 +355,9 @@ export default function App() {
                 ? new Date(backendUser.JoinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
                 : backendUser.joinDate
                 ? new Date(backendUser.joinDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-                : "Jan 2024",
+                : user.joinedDate
+                ? new Date(user.joinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                : "",
             });
           }
         } catch (error) {
@@ -376,7 +382,7 @@ export default function App() {
         location: "",
         bio: "",
         avatar: "",
-        joinedDate: "Jan 2024",
+        joinedDate: "",
       });
     }
   }, [user, isAuthenticated]); // Update when user or isAuthenticated changes
@@ -501,12 +507,7 @@ export default function App() {
               location: "",
               bio: "",
               avatar: userData.avatar || "",
-              joinedDate:
-                userData.joinedDate ||
-                new Date().toLocaleDateString("en-US", {
-                  month: "short",
-                  year: "numeric",
-                }),
+              joinedDate: userData.joinedDate || "",
             });
           }
 
@@ -1227,23 +1228,22 @@ export default function App() {
   if (showSellerProfile) {
     const product = availableProducts.find((p) => p.id === selectedProductId);
     if (product) {
-      const sellerProducts = availableProducts.filter(
-        (p) => p.seller === product.seller
+      const sellerProducts = availableProducts.filter((candidate) =>
+        product.sellerId
+          ? candidate.sellerId === product.sellerId
+          : candidate.seller === product.seller
       );
 
       // Create seller object from product data
-      // Ensure sellerId is always a string (standardize ID types)
-      // product.sellerId is already typed as string, but provide fallback for safety
-      const sellerId: string = product.sellerId || `seller-${product.id}`;
+      const sellerId = product.sellerId || "";
 
-      // Fetch seller data to get actual joined date and avatar
-      // We'll use a state to store this, but for now use a placeholder
-      // The actual data should be fetched when the seller profile page loads
       const seller = {
         id: sellerId,
         name: product.seller,
-        activeListings: sellerProducts.length,
-        joinedDate: "Jan 2024", // Will be updated when seller data is fetched
+        activeListings: sellerProducts.filter(
+          (candidate) => candidate.status === "ACTIVE"
+        ).length,
+        joinedDate: "",
         location: product.location,
         area: product.area,
         initials: product.seller
@@ -1251,9 +1251,7 @@ export default function App() {
           .map((n) => n[0])
           .join(""),
         color: "#0A4ABF",
-        bio: `Trusted seller on TijarahJo. Based in ${product.location}${
-          product.area ? `, ${product.area}` : ""
-        }. Fast responses and quality items.`,
+        bio: "",
         phone: product.phone || "",
       };
 

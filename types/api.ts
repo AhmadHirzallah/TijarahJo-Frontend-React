@@ -48,6 +48,7 @@ export interface User {
   joinedDate: string; // ISO date string
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string
+  role?: "user" | "admin" | "moderator";
 }
 
 // ============================================================================

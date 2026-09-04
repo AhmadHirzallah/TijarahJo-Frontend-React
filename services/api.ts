@@ -19,6 +19,7 @@ import {
   CategoriesResponse,
 } from "../types/api";
 import { Product } from "../types";
+import { normalizeUserRole } from "../utils/roleUtils";
 
 // ============================================================================
 // Configuration
@@ -232,17 +233,20 @@ export const authApi = {
             area: user.Area || user.area || "",
             bio: user.Bio || user.bio || "",
             avatar: user.Avatar || user.avatar || undefined,
+            role: normalizeUserRole(
+              user.Role || user.role || backendResponse.Role
+            ),
             joinedDate: user.JoinedDate
               ? new Date(user.JoinedDate).toISOString()
               : user.joinedDate
               ? new Date(user.joinedDate).toISOString()
-              : new Date().toISOString(),
+              : "",
             createdAt: user.JoinedDate
               ? new Date(user.JoinedDate).toISOString()
               : user.joinedDate
               ? new Date(user.joinedDate).toISOString()
-              : new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+              : "",
+            updatedAt: "",
           };
           return {
             success: true,
@@ -379,17 +383,20 @@ export const authApi = {
               area: user.Area || user.area || "",
               bio: user.Bio || user.bio || "",
               avatar: user.Avatar || user.avatar || undefined,
+              role: normalizeUserRole(
+                user.Role || user.role || backendResponse.Role
+              ),
               joinedDate: user.JoinedDate
                 ? new Date(user.JoinedDate).toISOString()
                 : user.joinedDate
                 ? new Date(user.joinedDate).toISOString()
-                : new Date().toISOString(),
+                : "",
               createdAt: user.JoinedDate
                 ? new Date(user.JoinedDate).toISOString()
                 : user.joinedDate
                 ? new Date(user.joinedDate).toISOString()
-                : new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+                : "",
+              updatedAt: "",
             },
           } as any;
         } else {
@@ -747,10 +754,13 @@ function transformPostModelToProduct(
       "",
     image: postImages[0] ?? "",
     images: postImages,
+    phone: postModel.OwnerPhone ?? postModel.Phone ?? postModel.phone,
     description: description,
     createdAt: postModel.CreatedAt
       ? new Date(postModel.CreatedAt).toISOString()
-      : new Date().toISOString(),
+      : postModel.createdAt
+      ? new Date(postModel.createdAt).toISOString()
+      : undefined,
     views: postModel.Views ?? postModel.views ?? 0,
     status: postModel.IsDeleted
       ? "DELETED"
@@ -1344,7 +1354,7 @@ export const usersApi = {
         area: user.Area || user.area || "",
         bio: user.Bio || user.bio || "",
         avatar: user.Avatar || user.avatar || undefined,
-        joinedDate: user.JoinedDate || user.joinedDate || new Date().toISOString(),
+        joinedDate: user.JoinedDate || user.joinedDate || "",
         name: `${user.FirstName || user.firstName || ""} ${
           user.LastName || user.lastName || ""
         }`.trim(),
