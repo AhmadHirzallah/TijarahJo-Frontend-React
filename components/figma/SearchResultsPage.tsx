@@ -49,7 +49,7 @@ export function SearchResultsPage({
   // Filter products by search query only
   const query = localSearchQuery.toLowerCase().trim();
   let filteredProducts = products.filter(p =>
-    (p.status !== "SOLD" && p.status !== "DELETED") && // Filter out SOLD/DELETED
+    p.status === "ACTIVE" &&
     (p.name.toLowerCase().includes(query) ||
     p.category.toLowerCase().includes(query) ||
     p.location.toLowerCase().includes(query) ||

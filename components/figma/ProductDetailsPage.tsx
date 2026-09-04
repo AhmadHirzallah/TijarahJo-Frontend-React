@@ -751,7 +751,9 @@ export function ProductDetailsPage({
                           type="button"
                           onClick={() => setShowRelistDialog(true)}
                         >
-                          {t.relist || "Re-list Post"}
+                          {language === "ar"
+                            ? "إرسال لإعادة المراجعة"
+                            : "Submit Re-listing"}
                         </Button>
                       ) : (
                         <Button
@@ -1260,8 +1262,8 @@ export function ProductDetailsPage({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {language === "ar"
-                ? "هل تريد إعادة إدراج هذا المنتج؟ سيتم تنشيط المنتج مرة أخرى ويمكن للمشترين مشاهدته."
-                : "Are you sure you want to re-list this post? The post will become active again and buyers will be able to view it."}
+                ? "هل تريد إرسال هذا المنشور لإعادة الإدراج؟ سيظهر للمشترين بعد موافقة المشرف."
+                : "Submit this post for re-listing? It will be visible to buyers after moderator approval."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1278,7 +1280,7 @@ export function ProductDetailsPage({
               className="transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
               style={{ backgroundColor: "#0A4ABF", color: "white" }}
             >
-              {language === "ar" ? "إعادة الإداج" : "Re-list Post"}
+              {language === "ar" ? "إرسال للمراجعة" : "Submit for Review"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

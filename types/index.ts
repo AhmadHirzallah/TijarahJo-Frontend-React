@@ -20,7 +20,15 @@ export interface Product {
   updatedAt?: string;
   views?: number;
   condition?: string;
-  status?: "ACTIVE" | "SOLD" | "DELETED"; // Listing status - defaults to ACTIVE
+  status?:
+    | "DRAFT"
+    | "PENDING"
+    | "ACTIVE"
+    | "SOLD"
+    | "EXPIRED"
+    | "REJECTED"
+    | "REMOVED"
+    | "DELETED";
 }
 
 export interface UserProfile {

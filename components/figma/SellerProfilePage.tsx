@@ -106,7 +106,7 @@ export function SellerProfilePage({
   // Get seller's products
   const sellerProducts = products.filter(p => p.seller === seller.name);
   // Only show ACTIVE products to buyers (not SOLD or DELETED)
-  const activeProducts = sellerProducts.filter(p => p.status !== "SOLD" && p.status !== "DELETED");
+  const activeProducts = sellerProducts.filter(p => p.status === "ACTIVE");
 
   // Format phone number with masking
   const formatPhone = (phone: string, revealed: boolean) => {

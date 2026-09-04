@@ -61,7 +61,7 @@ export function AllProductsPage({
   let filteredProducts = products;
 
   // Filter out SOLD and DELETED products - only show ACTIVE
-  filteredProducts = filteredProducts.filter(p => p.status !== "SOLD" && p.status !== "DELETED");
+  filteredProducts = filteredProducts.filter(p => p.status === "ACTIVE");
 
   // Filter by search
   if (searchQuery) {

@@ -131,6 +131,8 @@ export default function App() {
   );
   const [availableProducts, setAvailableProducts] =
     useState<Product[]>([]);
+  const [selectedProductDetails, setSelectedProductDetails] =
+    useState<Product | null>(null);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [productDetailsOrigin, setProductDetailsOrigin] = useLocalStorage<
@@ -250,10 +252,28 @@ export default function App() {
     }
   };
 
-  // Fetch posts from backend on component mount
+  // Refresh when authentication changes so an owner can also see drafts and
+  // pending listings on their profile.
   useEffect(() => {
-    fetchPostsFromBackend();
-  }, []); // Only run once on mount
+    if (!authLoading) fetchPostsFromBackend();
+  }, [authLoading, isAuthenticated]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedProductId) {
+      setSelectedProductDetails(null);
+      return;
+    }
+
+    api.posts.getPost(selectedProductId).then((product) => {
+      if (!cancelled && product) setSelectedProductDetails(product);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProductId]);
 
   // Validate persisted product ID when products are loaded
   // Clear it if the product no longer exists (e.g., was deleted)
@@ -370,10 +390,8 @@ export default function App() {
   const filteredProducts = useMemo(() => {
     let products = availableProducts;
 
-    // Filter out SOLD and DELETED products from main marketplace feed
-    products = products.filter(
-      (p) => p.status !== "SOLD" && p.status !== "DELETED"
-    );
+    // Only moderator-approved listings belong in the public marketplace feed.
+    products = products.filter((p) => p.status === "ACTIVE");
 
     // Filter by debounced search query
     if (debouncedSearchQuery.trim()) {
@@ -834,8 +852,8 @@ export default function App() {
               console.log("[App] Post created successfully:", result.post);
               toast.success(
                 language === "ar"
-                  ? "تم نشر المنشور بنجاح!"
-                  : "Post created successfully!"
+                  ? "تم إرسال المنشور للمراجعة بنجاح!"
+                  : "Post submitted for review successfully!"
               );
 
               // Refresh posts from backend to show the new post
@@ -1020,7 +1038,10 @@ export default function App() {
 
   // Show product details page
   if (selectedProductId !== null && !showSellerProfile) {
-    const product = availableProducts.find((p) => p.id === selectedProductId);
+    const product =
+      selectedProductDetails?.id === selectedProductId
+        ? selectedProductDetails
+        : availableProducts.find((p) => p.id === selectedProductId);
 
     // If we have a selectedProductId but products are still loading, show loading state
     if (isLoadingProducts && !product) {
@@ -1097,7 +1118,12 @@ export default function App() {
                 currentProduct.status !== updatedProduct.status;
 
               // If status changed, update status separately
-              if (statusChanged && updatedProduct.status) {
+              if (
+                statusChanged &&
+                (updatedProduct.status === "ACTIVE" ||
+                  updatedProduct.status === "SOLD" ||
+                  updatedProduct.status === "DELETED")
+              ) {
                 console.log(
                   "[App] Status changed, updating post status:",
                   updatedProduct.status

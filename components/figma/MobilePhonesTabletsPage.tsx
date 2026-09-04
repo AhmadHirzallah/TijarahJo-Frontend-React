@@ -73,7 +73,7 @@ export function MobilePhonesTabletsPage({
   const [viewMode, setViewMode] = useState<"grid-4" | "grid-3" | "grid-2" | "list">("grid-4");
 
   const filteredProducts = useMemo(() => {
-    const categoryProducts = products.filter(p => p.category === "Mobile Phones & Tablets" && p.status !== "SOLD" && p.status !== "DELETED");
+    const categoryProducts = products.filter(p => p.category === "Mobile Phones & Tablets" && p.status === "ACTIVE");
     if (!activeSearchQuery.trim()) return categoryProducts;
 
     const query = activeSearchQuery.toLowerCase().trim();

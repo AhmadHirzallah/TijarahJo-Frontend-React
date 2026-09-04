@@ -221,10 +221,12 @@ export interface UserAnalytics {
  * - GET    /api/posts/:id (get single post)
  * - POST   /api/posts (create new post)
  * - PUT    /api/posts/:id (update post)
- * - PATCH  /api/posts/:id/status (update post status)
+ * - PUT    /api/posts/:id (update post fields or owner-managed status)
  * - DELETE /api/posts/:id (delete post)
  * - GET    /api/posts/user/:userId (get user's posts)
- * - GET    /api/posts/category/:category (get posts by category)
+ * - GET    /api/posts/paginated?CategoryID=:category (filter by category)
+ * - GET    /api/posts/:id/images (get a post's images)
+ * - POST   /api/posts/:id/images/upload-base64 (upload a browser image)
  *
  * CATEGORIES:
  * - GET    /api/categories (list all categories)

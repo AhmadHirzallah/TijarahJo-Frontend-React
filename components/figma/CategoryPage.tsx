@@ -75,7 +75,7 @@ export function CategoryPage({
   const categoryColor = currentCategory?.color || "#0A4ABF";
 
   const filteredProducts = useMemo(() => {
-    const categoryProducts = products.filter(p => p.category === categoryName && p.status !== "SOLD" && p.status !== "DELETED");
+    const categoryProducts = products.filter(p => p.category === categoryName && p.status === "ACTIVE");
     if (!activeSearchQuery.trim()) return categoryProducts;
 
     const query = activeSearchQuery.toLowerCase().trim();

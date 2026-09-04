@@ -158,7 +158,7 @@ async function apiRequest<T>(
           error: {
             code: "CONNECTION_REFUSED",
             message:
-              "Cannot connect to backend. Please make sure the backend is running on http://localhost:5033. Start it with: cd TijarahJo-Backend/TijarahJoDBAPI/TijarahJoDBAPI && dotnet run",
+              "Cannot connect to backend. Please make sure the backend is running on http://localhost:5033. Start it with: cd TijarahJo-Backend/TijarahJoDBAPI && dotnet run",
           },
         };
       }
@@ -586,109 +586,55 @@ export function clearCaches() {
 }
 
 async function enrichPostsWithCategoryAndSeller(posts: any[]): Promise<any[]> {
-  // Always refresh cache to ensure we have latest data
-  // This ensures new posts show correct category and seller names
-  try {
-    // Try the correct endpoint first: /categories/All (matches controller route)
-    let categoriesResponse = await apiRequest<any[]>(
-      "/categories/All",
-      {
-        method: "GET",
-      }
-    );
-
-    // If that fails, try the old endpoint as fallback
-    if (!categoriesResponse.success || !categoriesResponse.data) {
-      console.warn("[enrichPosts] Failed to fetch categories from /categories/All, trying /categories/All");
-      categoriesResponse = await apiRequest<any[]>(
-        "/categories/All",
-        {
-          method: "GET",
-        }
-      );
-    }
-
-    const allCategories = categoriesResponse.success
+  // Listing responses already contain these display fields. The reference-data
+  // calls below fill them in for the smaller create/get-by-id responses.
+  if (categoriesCache === null) {
+    categoriesCache = {};
+    const categoriesResponse = await apiRequest<any[]>("/categories", {
+      method: "GET",
+    });
+    const categories = categoriesResponse.success
       ? categoriesResponse.data || []
       : [];
-
-    categoriesCache = {};
-
-    if (allCategories.length === 0) {
-      console.warn("[enrichPosts] No categories returned from API. Response:", categoriesResponse);
-    } else {
-      console.log(`[enrichPosts] Fetched ${allCategories.length} categories from API`);
-    }
-
-    allCategories.forEach((cat: any) => {
-      const catId = cat.CategoryID || cat.categoryID;
-      const catName = cat.CategoryName || cat.categoryName;
-      if (catId && catName) {
-        categoriesCache![catId] = catName;
-      } else {
-        console.warn("[enrichPosts] Skipping invalid category:", cat);
-      }
+    categories.forEach((category: any) => {
+      const categoryId = category.CategoryID || category.categoryID;
+      const categoryName = category.CategoryName || category.categoryName;
+      if (categoryId && categoryName) categoriesCache![categoryId] = categoryName;
     });
-
-    console.log(`[enrichPosts] Built categories cache with ${Object.keys(categoriesCache).length} entries`);
-  } catch (error) {
-    console.error("[enrichPosts] Error fetching categories:", error);
-    categoriesCache = {};
   }
 
-  // Fetch users - always refresh to get latest user data
-  // Note: Backend route is /api/users/All (not /TbUsers/All)
-  const usersResponse = await apiRequest<any[]>("/users/All", {
-    method: "GET",
-  });
-  const allUsers = usersResponse.success ? usersResponse.data || [] : [];
-  usersCache = {};
+  if (usersCache === null) usersCache = {};
+  const missingUserIds = [
+    ...new Set(
+      posts
+        .filter(
+          (post) =>
+            !post.SellerFullName &&
+            !post.Username &&
+            !post.Seller &&
+            post.UserID != null &&
+            !usersCache![post.UserID]
+        )
+        .map((post) => Number(post.UserID))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
 
-  console.log(`[enrichPosts] Fetched ${allUsers.length} users from API`);
+  await Promise.all(
+    missingUserIds.map(async (userId) => {
+      const userResponse = await apiRequest<any>(`/users/${userId}`, {
+        method: "GET",
+      });
+      if (!userResponse.success || !userResponse.data) return;
 
-  allUsers.forEach((user: any) => {
-    // Handle both number and string IDs - store both formats for matching
-    const userId = user.UserID || user.userID || user.Id || user.id;
-    const username = user.Username || user.username || "";
-    const firstName = user.FirstName || user.firstName || "";
-    const lastName = user.LastName || user.lastName || "";
-
-    if (userId !== null && userId !== undefined) {
-      // Store user name with both number and string key for flexible matching
-      const userIdNum = typeof userId === 'string' ? parseInt(userId, 10) : userId;
-      const userIdStr = userIdNum.toString();
-
-      // Build display name with better fallback logic
-      let displayName = username;
-      if (!displayName || displayName.trim() === "") {
-        if (firstName && lastName) {
-          displayName = `${firstName} ${lastName}`.trim();
-        } else if (firstName) {
-          displayName = firstName;
-        } else if (lastName) {
-          displayName = lastName;
-        } else if (user.Email || user.email) {
-          displayName = user.Email || user.email;
-        } else {
-          displayName = `User ${userIdNum}`; // Better than "Unknown"
-        }
-      }
-
-      // Store in cache with both numeric and string keys
-      if (!isNaN(userIdNum)) {
-        usersCache![userIdNum] = displayName;
-      }
-      if (userIdStr) {
-        usersCache![userIdStr] = displayName;
-      }
-    }
-  });
-
-  console.log(`[enrichPosts] Built users cache with ${Object.keys(usersCache).length} entries:`, usersCache);
-
-  // Track missing categories to avoid duplicate warnings
-  const missingCategories = new Set<number>();
-  const missingUsers = new Set<number | string>();
+      const user = userResponse.data;
+      const displayName =
+        user.Username ||
+        [user.FirstName, user.LastName].filter(Boolean).join(" ") ||
+        `User ${userId}`;
+      usersCache![userId] = displayName;
+    })
+  );
 
   // Enrich posts with category and seller names
   return posts.map((post: any) => {
@@ -702,28 +648,77 @@ async function enrichPostsWithCategoryAndSeller(posts: any[]): Promise<any[]> {
     const userIdStr = userIdNum !== null ? userIdNum.toString() : null;
 
     // Try to find user in cache with flexible matching
-    let sellerName = "Unknown";
+    let sellerName =
+      post.SellerFullName ||
+      post.Username ||
+      post.Seller ||
+      "Unknown";
     if (userIdNum !== null && !isNaN(userIdNum)) {
-      sellerName = usersCache![userIdNum] || usersCache![userIdStr || ""] || "Unknown";
-    }
-
-    // Track missing data (only log once per unique ID)
-    if (categoryId && !categoriesCache![categoryId] && !missingCategories.has(categoryId)) {
-      missingCategories.add(categoryId);
-      console.warn(`[enrichPosts] Category ID ${categoryId} not found in cache. Available categories:`, Object.keys(categoriesCache!));
-    }
-    if (sellerName === "Unknown" && userIdNum !== null && !missingUsers.has(userIdNum) && !missingUsers.has(userIdStr || "")) {
-      missingUsers.add(userIdNum);
-      if (userIdStr) missingUsers.add(userIdStr);
-      console.warn(`[enrichPosts] User ID ${userIdNum} (${userIdStr}) not found in cache. Post UserID:`, post.UserID, "Post userID:", post.userID);
+      sellerName =
+        usersCache![userIdNum] ||
+        usersCache![userIdStr || ""] ||
+        sellerName;
     }
 
     return {
       ...post,
-      Category: categoriesCache![categoryId] || "Unknown",
+      Category:
+        post.CategoryName ||
+        post.Category ||
+        categoriesCache![categoryId] ||
+        "Unknown",
       Seller: sellerName,
     };
   });
+}
+
+interface PostImageRecord {
+  PostImageID?: number;
+  PostImageURL?: string;
+  IsDeleted?: boolean;
+}
+
+function imageUrlsFromPayload(payload: any): string[] {
+  const records = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.Images)
+    ? payload.Images
+    : [];
+
+  return records
+    .filter((image: PostImageRecord) => !image.IsDeleted)
+    .map((image: PostImageRecord) => image.PostImageURL || "")
+    .filter((url: string) => url.trim().length > 0);
+}
+
+async function fetchPostImages(postId: string | number): Promise<PostImageRecord[]> {
+  const response = await apiRequest<any>(`/posts/${postId}/images`, {
+    method: "GET",
+  });
+
+  if (!response.success || !response.data) return [];
+
+  const records = Array.isArray(response.data)
+    ? response.data
+    : response.data.Images;
+  return Array.isArray(records)
+    ? records.filter((image: PostImageRecord) => !image.IsDeleted)
+    : [];
+}
+
+async function createPostImage(postId: string | number, imageUrl: string) {
+  const isBase64Image = imageUrl.startsWith("data:image/");
+  return apiRequest<any>(
+    `/posts/${postId}/images${isBase64Image ? "/upload-base64" : ""}`,
+    {
+      method: "POST",
+      body: JSON.stringify(
+        isBase64Image
+          ? { ImageData: imageUrl }
+          : { PostImageURL: imageUrl }
+      ),
+    }
+  );
 }
 
 /**
@@ -734,16 +729,15 @@ function transformPostModelToProduct(
   images: string[] = [],
   fallbackIndex?: number
 ): Product {
-  // Debug: Log what we're transforming
-  console.log("Transforming postModel:", postModel);
-  console.log("PostTitle in transform:", postModel.PostTitle);
-  console.log("PostDescription in transform:", postModel.PostDescription);
-
-  // Get images for this post
+  const embeddedImages = imageUrlsFromPayload(postModel.Images);
+  const primaryImage =
+    postModel.PrimaryImageUrl || postModel.PostImageURL || "";
   const postImages =
     images.length > 0
       ? images
-      : postModel.Images || [postModel.PostImageURL || ""].filter(Boolean);
+      : embeddedImages.length > 0
+      ? embeddedImages
+      : [primaryImage].filter(Boolean);
 
   // Ensure we always have a unique ID - use fallback index if needed
   const postId = postModel.PostID?.toString() || postModel.id;
@@ -755,18 +749,6 @@ function transformPostModelToProduct(
 
   const name = postModel.PostTitle ?? postModel.name ?? "";
   const description = postModel.PostDescription ?? postModel.description ?? "";
-
-  console.log("Final name:", name);
-  console.log("Final description:", description);
-
-  // Debug: Log Views and City to help troubleshoot
-  console.log("[transformPostModelToProduct] PostModel data:", {
-    PostID: postModel.PostID,
-    Views: postModel.Views,
-    City: postModel.City,
-    Area: postModel.Area,
-    Location: postModel.Location,
-  });
 
   return {
     id: uniqueId,
@@ -793,14 +775,23 @@ function transformPostModelToProduct(
       ? new Date(postModel.CreatedAt).toISOString()
       : new Date().toISOString(),
     views: postModel.Views ?? postModel.views ?? 0,
-    status:
-      postModel.Status === 0
-        ? "ACTIVE"
-        : postModel.Status === 3
-        ? "SOLD"
-        : postModel.Status === 1
-        ? "DELETED"
-        : postModel.Status || "ACTIVE",
+    status: postModel.IsDeleted
+      ? "DELETED"
+      : postModel.Status === 0
+      ? "DRAFT"
+      : postModel.Status === 1
+      ? "PENDING"
+      : postModel.Status === 2
+      ? "ACTIVE"
+      : postModel.Status === 3
+      ? "SOLD"
+      : postModel.Status === 4
+      ? "EXPIRED"
+      : postModel.Status === 5
+      ? "REJECTED"
+      : postModel.Status === 6
+      ? "REMOVED"
+      : "DRAFT",
   };
 }
 
@@ -838,166 +829,89 @@ export const postsApi = {
    * Get all posts with optional filters and pagination
    */
   getPosts: async (params?: SearchRequest): Promise<PostsListResponse> => {
-    // Use pagination endpoint if page/limit provided, otherwise use All
-    if (params?.page || params?.limit) {
-      const pageNumber = params.page || 1;
-      const rowsPerPage = params.limit || 20;
+    const pageNumber = params?.page || 1;
+    const rowsPerPage = Math.min(params?.limit || 100, 100);
+    const query = new URLSearchParams({
+      PageNumber: pageNumber.toString(),
+      RowsPerPage: rowsPerPage.toString(),
+      IncludeDeleted: "false",
+    });
 
-      const response = await apiRequest<any[]>(
-        `/posts/pagination?PageNumber=${pageNumber}&RowsPerPage=${rowsPerPage}&IncludeDeleted=false`,
-        { method: "GET" }
-      );
-
-      if (response.success && response.data && Array.isArray(response.data)) {
-        // Get post images (even if posts array is empty)
-        const imagesResponse = await apiRequest<any[]>("/TbPostImages/All", {
-          method: "GET",
-        });
-        const allImages = imagesResponse.success
-          ? imagesResponse.data || []
-          : [];
-
-        console.log("getPosts (pagination) - Images response:", imagesResponse);
-        console.log("getPosts (pagination) - All images:", allImages);
-
-        // Group images by post ID
-        const imagesByPostId: Record<string, string[]> = {};
-        allImages.forEach((img: any) => {
-          const postId = img.PostID?.toString() || "";
-          if (!imagesByPostId[postId]) imagesByPostId[postId] = [];
-          if (
-            img.PostImageURL &&
-            img.PostImageURL.trim() !== "" &&
-            !img.IsDeleted
-          ) {
-            imagesByPostId[postId].push(img.PostImageURL);
-            console.log(
-              `getPosts (pagination) - Added image for PostID ${postId}: ${img.PostImageURL}`
-            );
-          }
-        });
-
-        console.log(
-          "getPosts (pagination) - Images by PostID:",
-          imagesByPostId
-        );
-
-        // Enrich posts with category and seller names
-        const enrichedPosts = await enrichPostsWithCategoryAndSeller(
-          response.data
-        );
-
-        // Process posts (even if empty array)
-        const posts = enrichedPosts.map((post: any) =>
-          transformPostModelToProduct(
-            post,
-            imagesByPostId[post.PostID?.toString() || ""] || []
-          )
-        );
-
-        return {
-          success: true,
-          posts,
-          pagination: {
-            currentPage: pageNumber,
-            totalPages:
-              response.data.length > 0
-                ? Math.ceil(posts.length / rowsPerPage)
-                : 0,
-            totalPosts: posts.length,
-            postsPerPage: rowsPerPage,
-          },
-        };
-      }
-    } else {
-      // Get all posts
-      const response = await apiRequest<any[]>("/posts/All", {
-        method: "GET",
-      });
-
-      if (response.success && response.data && Array.isArray(response.data)) {
-        // Debug: Log raw response
-        console.log("getPosts - Raw response.data:", response.data);
-        if (response.data.length > 0) {
-          console.log("First post in response:", response.data[0]);
-          console.log("First post PostTitle:", response.data[0].PostTitle);
-          console.log(
-            "First post PostDescription:",
-            response.data[0].PostDescription
-          );
-        }
-
-        // Get post images (even if posts array is empty)
-        const imagesResponse = await apiRequest<any[]>("/TbPostImages/All", {
-          method: "GET",
-        });
-        const allImages = imagesResponse.success
-          ? imagesResponse.data || []
-          : [];
-
-        // Group images by post ID - filter out deleted and empty images
-        const imagesByPostId: Record<string, string[]> = {};
-        allImages.forEach((img: any) => {
-          const postId = img.PostID?.toString() || "";
-          if (!imagesByPostId[postId]) imagesByPostId[postId] = [];
-          if (
-            img.PostImageURL &&
-            img.PostImageURL.trim() !== "" &&
-            !img.IsDeleted
-          ) {
-            imagesByPostId[postId].push(img.PostImageURL);
-          }
-        });
-
-        // Enrich posts with category and seller names
-        const enrichedPosts = await enrichPostsWithCategoryAndSeller(
-          response.data
-        );
-
-        console.log("Enriched posts:", enrichedPosts);
-        if (enrichedPosts.length > 0) {
-          console.log("First enriched post:", enrichedPosts[0]);
-        }
-
-        // Process posts (even if empty array)
-        const posts = enrichedPosts.map((post: any, index: number) =>
-          transformPostModelToProduct(
-            post,
-            imagesByPostId[post.PostID?.toString() || ""] || [],
-            index
-          )
-        );
-
-        console.log("Final transformed posts:", posts);
-        if (posts.length > 0) {
-          console.log("First transformed post name:", posts[0].name);
-          console.log(
-            "First transformed post description:",
-            posts[0].description
-          );
-        }
-
-        return {
-          success: true,
-          posts,
-          pagination: {
-            currentPage: 1,
-            totalPages: response.data.length > 0 ? 1 : 0,
-            totalPosts: posts.length,
-            postsPerPage: posts.length > 0 ? posts.length : 20,
-          },
-        };
-      }
+    if (params?.category && /^\d+$/.test(params.category)) {
+      query.set("CategoryID", params.category);
     }
 
+    const response = await apiRequest<any>(
+      `/posts/paginated?${query.toString()}`,
+      { method: "GET" }
+    );
+
+    if (!response.success && response.error.code !== "HTTP_404") {
+      return {
+        success: false,
+        posts: [],
+        pagination: {
+          currentPage: pageNumber,
+          totalPages: 0,
+          totalPosts: 0,
+          postsPerPage: rowsPerPage,
+        },
+        error: {
+          message: response.error.message,
+          code: response.error.code,
+        },
+      };
+    }
+
+    const publicItems =
+      response.success && Array.isArray(response.data?.Items)
+        ? response.data.Items
+        : [];
+    let items = publicItems;
+
+    // The marketplace feed remains public-only, while the shared collection
+    // also carries the signed-in user's drafts/pending posts for their profile.
+    if (!params && localStorage.getItem("tijarahjo_token")) {
+      const ownResponse = await apiRequest<any>(
+        "/posts/my?PageNumber=1&RowsPerPage=100&IncludeDeleted=false",
+        { method: "GET" }
+      );
+      const ownItems =
+        ownResponse.success && Array.isArray(ownResponse.data?.Items)
+          ? ownResponse.data.Items
+          : [];
+      const byId = new Map<string, any>();
+      [...publicItems, ...ownItems].forEach((post) => {
+        if (post.PostID != null) byId.set(post.PostID.toString(), post);
+      });
+      items = [...byId.values()];
+    }
+
+    const enrichedPosts = await enrichPostsWithCategoryAndSeller(items);
+    const posts = enrichedPosts.map((post: any, index: number) =>
+      transformPostModelToProduct(post, [], index)
+    );
+
     return {
-      success: false,
-      posts: [],
+      success: true,
+      posts,
       pagination: {
-        currentPage: 1,
-        totalPages: 0,
-        totalPosts: 0,
-        postsPerPage: 20,
+        currentPage:
+          response.success && response.data?.PageNumber
+            ? response.data.PageNumber
+            : pageNumber,
+        totalPages:
+          response.success && response.data?.TotalPages
+            ? response.data.TotalPages
+            : 0,
+        totalPosts:
+          response.success && response.data?.TotalCount != null
+            ? response.data.TotalCount
+            : publicItems.length,
+        postsPerPage:
+          response.success && response.data?.RowsPerPage
+            ? response.data.RowsPerPage
+            : rowsPerPage,
       },
     };
   },
@@ -1011,55 +925,13 @@ export const postsApi = {
     });
 
     if (response.success && response.data) {
-      // Debug: Log the raw response
-      console.log("Raw API response for post:", response.data);
-      console.log("PostTitle:", response.data.PostTitle);
-      console.log("PostDescription:", response.data.PostDescription);
-      console.log("Views:", response.data.Views, "Type:", typeof response.data.Views);
-      console.log("City:", response.data.City, "Location:", response.data.Location);
-      console.log("Area:", response.data.Area);
-
-      // Get images for this post
-      const imagesResponse = await apiRequest<any[]>(`/TbPostImages/All`, {
-        method: "GET",
-      });
-      const allImages = imagesResponse.success ? imagesResponse.data || [] : [];
-      console.log("getPost - Images response:", imagesResponse);
-      console.log("getPost - All images:", allImages);
-      console.log("getPost - Looking for PostID:", id);
-
-      const postImages = allImages
-        .filter((img: any) => img.PostID?.toString() === id && !img.IsDeleted)
-        .map((img: any) => img.PostImageURL)
-        .filter((url: string) => url && url.trim() !== "");
-
-      console.log("getPost - Filtered images for this post:", postImages);
+      const postImages = imageUrlsFromPayload(await fetchPostImages(id));
 
       // Enrich post with category and seller names before transforming
       const enrichedPost = await enrichPostsWithCategoryAndSeller([response.data]);
       const enrichedPostData = enrichedPost[0] || response.data;
 
-      // Track view (increment view count)
-      try {
-        await apiRequest(`/posts/${id}/views`, {
-          method: "POST",
-        });
-      } catch (error) {
-        console.warn("[getPost] Failed to increment views:", error);
-        // Don't fail the request if view tracking fails
-      }
-
-      const transformed = transformPostModelToProduct(
-        enrichedPostData,
-        postImages
-      );
-      console.log("Transformed product:", transformed);
-      console.log("Product name:", transformed.name);
-      console.log("Product description:", transformed.description);
-      console.log("Product category:", transformed.category);
-      console.log("Product seller:", transformed.seller);
-
-      return transformed;
+      return transformPostModelToProduct(enrichedPostData, postImages);
     }
 
     return null;
@@ -1069,41 +941,10 @@ export const postsApi = {
    * Create new post
    */
   createPost: async (postData: CreatePostRequest): Promise<PostResponse> => {
-    // Get current user ID from JWT token by calling /auth/me endpoint
-    let userId = "";
-    try {
-      const currentUserResponse = await api.auth.getCurrentUser();
-      if (currentUserResponse.success && currentUserResponse.data) {
-        const user = currentUserResponse.data as any;
-        userId = (user.Id || user.id || "").toString();
-        console.log("[createPost] Got user ID from /auth/me:", userId);
-      } else {
-        console.warn("[createPost] Failed to get current user from /auth/me");
-      }
-    } catch (error) {
-      console.error("[createPost] Error getting current user:", error);
-    }
-
-    // Try to decode JWT token as fallback
-    if (!userId) {
-      try {
-        const token = localStorage.getItem("tijarahjo_token");
-        if (token) {
-          // JWT token format: header.payload.signature
-          const payload = JSON.parse(atob(token.split(".")[1]));
-          userId = (payload.nameid || payload.sub || "").toString();
-          console.log("[createPost] Got user ID from JWT token:", userId);
-        }
-      } catch (tokenError) {
-        console.error("[createPost] Error decoding token:", tokenError);
-      }
-    }
-
-    // If still no user ID, throw error instead of defaulting to admin
-    if (!userId || userId === "" || userId === "0") {
+    // Ownership comes from the authenticated token on the backend.
+    if (!localStorage.getItem("tijarahjo_token")) {
       const errorMsg =
         "Cannot create post: User not authenticated. Please log in first.";
-      console.error("[createPost]", errorMsg);
       return {
         success: false,
         message: errorMsg,
@@ -1116,7 +957,7 @@ export const postsApi = {
 
     // Find category ID by name
     const categoriesResponse = await apiRequest<any[]>(
-      "/categories/All",
+      "/categories",
       { method: "GET" }
     );
     const categories = categoriesResponse.success
@@ -1147,75 +988,51 @@ export const postsApi = {
 
     if (response.success && response.data) {
       const postId = response.data.PostID || response.data.postID;
-      console.log("[createPost] Post created with ID:", postId);
 
       // Create post images
       const savedImageUrls: string[] = [];
       if (postData.images && postData.images.length > 0) {
-        console.log(
-          "[createPost] Creating",
-          postData.images.length,
-          "images for post",
-          postId
-        );
-        const imagePromises = postData.images.map(async (imageUrl, index) => {
+        const imagePromises = postData.images.map(async (imageUrl) => {
           if (!imageUrl || imageUrl.trim() === "") {
-            console.warn(
-              `[createPost] Skipping empty image URL at index ${index}`
-            );
             return null;
           }
 
           try {
-            const imageResponse = await apiRequest<any>("/TbPostImages", {
-              method: "POST",
-              body: JSON.stringify({
-                PostID: postId,
-                PostImageURL: imageUrl,
-                UploadedAt: new Date().toISOString(),
-                IsDeleted: false,
-              }),
-            });
+            const imageResponse = await createPostImage(postId, imageUrl);
 
             if (imageResponse.success && imageResponse.data) {
-              console.log(
-                `[createPost] Image ${index + 1} created successfully:`,
-                imageResponse.data
-              );
-              savedImageUrls.push(imageUrl);
-              return imageResponse.data;
-            } else {
-              const errorMsg =
-                !imageResponse.success && "error" in imageResponse
-                  ? imageResponse.error?.message || "Unknown error"
-                  : "Unknown error";
-              console.error(
-                `[createPost] Failed to create image ${index + 1}:`,
-                errorMsg
-              );
-              return null;
+              return imageUrl;
             }
+            return null;
           } catch (error) {
-            console.error(
-              `[createPost] Error creating image ${index + 1}:`,
-              error
-            );
+            console.error("[createPost] Error creating image:", error);
             return null;
           }
         });
 
         const imageResults = await Promise.all(imagePromises);
-        const successfulImages = imageResults.filter((img) => img !== null);
-        console.log(
-          `[createPost] Successfully created ${successfulImages.length} out of ${postData.images.length} images`
+        savedImageUrls.push(
+          ...imageResults.filter((url): url is string => url !== null)
         );
-      } else {
-        console.log("[createPost] No images to create");
       }
 
+      // A completed listing enters moderation; only moderators can grant the
+      // public Active state (status 2).
+      const submitResponse = await apiRequest<any>(`/posts/${postId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...backendPost,
+          Status: 1,
+        }),
+      });
+      const persistedPost =
+        submitResponse.success && submitResponse.data
+          ? submitResponse.data
+          : response.data;
+
       // Enrich post with category and seller names before transforming
-      const enrichedPost = await enrichPostsWithCategoryAndSeller([response.data]);
-      const enrichedPostData = enrichedPost[0] || response.data;
+      const enrichedPost = await enrichPostsWithCategoryAndSeller([persistedPost]);
+      const enrichedPostData = enrichedPost[0] || persistedPost;
 
       // Preserve location and area from postData (not stored in backend yet)
       enrichedPostData.Location = postData.city || "Jordan";
@@ -1262,7 +1079,7 @@ export const postsApi = {
     let categoryId = currentPost.CategoryID;
     if (postData.category) {
       const categoriesResponse = await apiRequest<any[]>(
-        "/categories/All",
+        "/categories",
         { method: "GET" }
       );
       const categories = categoriesResponse.success
@@ -1283,7 +1100,7 @@ export const postsApi = {
       PostTitle: postData.title || currentPost.PostTitle || "",
       PostDescription: postData.description || currentPost.PostDescription || "",
       Price: postData.price !== undefined ? postData.price : (currentPost.Price || 0),
-      Status: currentPost.Status !== undefined ? currentPost.Status : 0, // 0 = ACTIVE
+      Status: currentPost.Status !== undefined ? currentPost.Status : 0,
       City: postData.city || currentPost.City || "Jordan",
       Area: postData.area || currentPost.Area || null,
     };
@@ -1296,34 +1113,39 @@ export const postsApi = {
     if (response.success && response.data) {
       // Update images if provided
       if (postData.images) {
-        // Delete old images
-        const imagesResponse = await apiRequest<any[]>(`/TbPostImages/All`, {
-          method: "GET",
-        });
-        const allImages = imagesResponse.success
-          ? imagesResponse.data || []
-          : [];
-        const postImages = allImages.filter(
-          (img: any) => img.PostID?.toString() === postData.id
+        const currentImages = await fetchPostImages(postData.id);
+        const requestedImages = postData.images.filter(
+          (url) => url.trim().length > 0
         );
 
-        for (const img of postImages) {
-          await apiRequest(`/TbPostImages/${img.PostImageID}`, {
-            method: "DELETE",
-          });
+        for (const image of currentImages) {
+          if (
+            image.PostImageID &&
+            image.PostImageURL &&
+            !requestedImages.includes(image.PostImageURL)
+          ) {
+            await apiRequest(
+              `/posts/${postData.id}/images/${image.PostImageID}`,
+              {
+                method: "DELETE",
+              }
+            );
+          }
         }
 
-        // Add new images
-        for (const imageUrl of postData.images) {
-          await apiRequest("/TbPostImages", {
-            method: "POST",
-            body: JSON.stringify({
-              PostID: parseInt(postData.id),
-              PostImageURL: imageUrl,
-              UploadedAt: new Date().toISOString(),
-              IsDeleted: false,
-            }),
-          });
+        const existingUrls = new Set(
+          currentImages.map((image) => image.PostImageURL).filter(Boolean)
+        );
+        for (const imageUrl of requestedImages) {
+          if (existingUrls.has(imageUrl)) continue;
+
+          const imageResponse = await createPostImage(postData.id, imageUrl);
+          if (!imageResponse.success) {
+            return {
+              success: false,
+              message: imageResponse.error.message || "Failed to update post images",
+            };
+          }
         }
       }
 
@@ -1349,16 +1171,35 @@ export const postsApi = {
   updatePostStatus: async (
     data: UpdatePostStatusRequest
   ): Promise<PostResponse> => {
-    // Map frontend status to backend format
-    const statusMap: Record<string, string> = {
-      ACTIVE: "ACTIVE",
-      SOLD: "SOLD",
-      DELETED: "INACTIVE",
-    };
+    if (data.status === "DELETED") {
+      const result = await postsApi.deletePost(data.id);
+      return {
+        success: result.success,
+        message: result.error,
+      };
+    }
 
-    const response = await apiRequest<any>(`/posts/${data.id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ Status: statusMap[data.status] || "ACTIVE" }),
+    const current = await apiRequest<any>(`/posts/${data.id}`, {
+      method: "GET",
+    });
+    if (!current.success || !current.data) {
+      return { success: false, message: "Post not found" };
+    }
+
+    // Re-listing requires moderation again; owners may mark a listing sold but
+    // cannot directly grant themselves Active status.
+    const status = data.status === "SOLD" ? 3 : 1;
+    const response = await apiRequest<any>(`/posts/${data.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        CategoryID: current.data.CategoryID,
+        PostTitle: current.data.PostTitle,
+        PostDescription: current.data.PostDescription,
+        Price: current.data.Price,
+        Status: status,
+        City: current.data.City,
+        Area: current.data.Area,
+      }),
     });
 
     if (response.success && response.data) {
@@ -1405,31 +1246,17 @@ export const postsApi = {
    * Get posts by user ID
    */
   getUserPosts: async (userId: string): Promise<Product[]> => {
-    const response = await apiRequest<any[]>(`/posts/user/${userId}`, {
+    const response = await apiRequest<any>(`/posts/user/${userId}`, {
       method: "GET",
     });
 
-    if (response.success && response.data && Array.isArray(response.data)) {
-      // Get post images
-      const imagesResponse = await apiRequest<any[]>("/TbPostImages/All", {
-        method: "GET",
-      });
-      const allImages = imagesResponse.success ? imagesResponse.data || [] : [];
-
-      // Group images by post ID
-      const imagesByPostId: Record<string, string[]> = {};
-      allImages.forEach((img: any) => {
-        const postId = img.PostID?.toString() || "";
-        if (!imagesByPostId[postId]) imagesByPostId[postId] = [];
-        if (img.PostImageURL) imagesByPostId[postId].push(img.PostImageURL);
-      });
-
-      return response.data.map((post: any, index: number) =>
-        transformPostModelToProduct(
-          post,
-          imagesByPostId[post.PostID?.toString() || ""] || [],
-          index
-        )
+    if (response.success && response.data) {
+      const items = Array.isArray(response.data.Items)
+        ? response.data.Items
+        : [];
+      const enrichedPosts = await enrichPostsWithCategoryAndSeller(items);
+      return enrichedPosts.map((post: any, index: number) =>
+        transformPostModelToProduct(post, [], index)
       );
     }
 
@@ -1447,7 +1274,7 @@ export const postsApi = {
     let categoryId = parseInt(category);
     if (isNaN(categoryId)) {
       const categoriesResponse = await apiRequest<any[]>(
-        "/categories/All",
+        "/categories",
         { method: "GET" }
       );
       const categories = categoriesResponse.success
@@ -1470,56 +1297,11 @@ export const postsApi = {
         };
     }
 
-    const response = await apiRequest<any[]>(
-      `/posts/category/${categoryId}`,
-      { method: "GET" }
-    );
-
-    if (response.success && response.data && Array.isArray(response.data)) {
-      // Get post images
-      const imagesResponse = await apiRequest<any[]>("/TbPostImages/All", {
-        method: "GET",
-      });
-      const allImages = imagesResponse.success ? imagesResponse.data || [] : [];
-
-      // Group images by post ID
-      const imagesByPostId: Record<string, string[]> = {};
-      allImages.forEach((img: any) => {
-        const postId = img.PostID?.toString() || "";
-        if (!imagesByPostId[postId]) imagesByPostId[postId] = [];
-        if (img.PostImageURL) imagesByPostId[postId].push(img.PostImageURL);
-      });
-
-      const posts = response.data.map((post: any, index: number) =>
-        transformPostModelToProduct(
-          post,
-          imagesByPostId[post.PostID?.toString() || ""] || [],
-          index
-        )
-      );
-
-      return {
-        success: true,
-        posts,
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(posts.length / 20),
-          totalPosts: posts.length,
-          postsPerPage: 20,
-        },
-      };
-    }
-
-    return {
-      success: false,
-      posts: [],
-      pagination: {
-        currentPage: 1,
-        totalPages: 0,
-        totalPosts: 0,
-        postsPerPage: 20,
-      },
-    };
+    return postsApi.getPosts({
+      category: categoryId.toString(),
+      page,
+      limit: 20,
+    });
   },
 
   /**
@@ -1539,7 +1321,7 @@ export const categoriesApi = {
    * Get all categories
    */
   getCategories: async (): Promise<CategoriesResponse> => {
-    const response = await apiRequest<any[]>("/categories/All", {
+    const response = await apiRequest<any[]>("/categories", {
       method: "GET",
     });
 
@@ -1599,9 +1381,32 @@ export const usersApi = {
    * Update user profile
    */
   updateUser: async (userId: string, userData: any) => {
+    const payload = { ...userData };
+    if (
+      typeof payload.Avatar === "string" &&
+      payload.Avatar.startsWith("data:image/")
+    ) {
+      const imageResponse = await apiRequest<any>(
+        `/users/${userId}/images/upload-base64`,
+        {
+          method: "POST",
+          body: JSON.stringify({ ImageData: payload.Avatar }),
+        }
+      );
+
+      if (!imageResponse.success || !imageResponse.data?.Image?.ImageURL) {
+        const message = imageResponse.success
+          ? "Profile image upload failed"
+          : imageResponse.error.message;
+        throw new Error(message);
+      }
+
+      payload.Avatar = imageResponse.data.Image.ImageURL;
+    }
+
     const response = await apiRequest(`/users/${userId}`, {
       method: "PUT",
-      body: JSON.stringify(userData),
+      body: JSON.stringify(payload),
     });
 
     if (response.success) {

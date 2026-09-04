@@ -52,7 +52,7 @@ Main API areas:
 - `/auth` for login, registration, logout, and the current user
 - `/users` for public seller profiles and authenticated profile updates
 - `/posts` for listing reads and owner-managed mutations
-- `/TbPostImages` for post images
+- `/posts/{postId}/images` for authorized, post-scoped image management
 - `/categories` and `/roles` for reference/admin operations
 
 Mock data under `data/` is presentation fallback data; it is not the persistence
